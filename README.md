@@ -1,5 +1,12 @@
 # jabs
 just another bubble shooter
+
+## 🔵 Endlosmodus (z. B. klassischer Bubble Shooter)
+Es kommen ständig neue Reihen von oben nach, oft nach einer bestimmten Anzahl von Schüssen.
+
+Ziel ist es, so lange wie möglich zu überleben und Punkte zu sammeln.
+
+➜ Hier gewinnt man nicht, sondern spielt auf Highscore.
 🎮 Spielfeatures:
 
 Vollständige Bubble-Physik - Bubbles prallen an Wänden ab und kollidieren realistisch

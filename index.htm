@@ -287,6 +287,8 @@
                 this.score = 0;
                 this.level = 1;
                 this.gameRunning = true;
+                this.shotsFired = 0;
+                this.shotsPerRow = 5;
                 
                 this.shooter = {
                     x: this.canvas.width / 2,
@@ -442,6 +444,10 @@
                 
                 this.animateBubble(bubble);
                 this.nextBubble();
+                this.shotsFired++;
+                if (this.shotsFired % this.shotsPerRow === 0) {
+                    this.addRow();
+                }
             }
             
             animateBubble(bubble) {
@@ -501,6 +507,7 @@
                     };
                     
                     this.checkMatches(row, col);
+                    this.checkGameOver();
                 }
             }
             
@@ -654,6 +661,49 @@
                 this.level++;
                 this.createInitialGrid();
                 this.updateUI();
+            }
+
+            addRow() {
+                const newRow = [];
+                const offsetX = 0;
+                const cols = Math.floor((this.canvas.width - offsetX) / (this.bubbleRadius * 2));
+                for (let col = 0; col < cols; col++) {
+                    if (Math.random() < 0.8) {
+                        newRow[col] = {
+                            color: this.getRandomColor(),
+                            x: col * (this.bubbleRadius * 2) + this.bubbleRadius + offsetX,
+                            y: this.bubbleRadius + 50
+                        };
+                    }
+                }
+
+                for (let row = this.grid.length - 1; row >= 0; row--) {
+                    if (!this.grid[row]) continue;
+                    for (let col = 0; col < this.grid[row].length; col++) {
+                        const bubble = this.grid[row][col];
+                        if (bubble) {
+                            bubble.y += this.bubbleRadius * 1.8;
+                        }
+                    }
+                    this.grid[row + 1] = this.grid[row];
+                }
+
+                this.grid[0] = newRow;
+                this.checkGameOver();
+            }
+
+            checkGameOver() {
+                const limit = this.shooter.y - this.bubbleRadius * 2;
+                for (let row = 0; row < this.grid.length; row++) {
+                    for (let col = 0; col < this.grid[row].length; col++) {
+                        const bubble = this.grid[row][col];
+                        if (bubble && bubble.y >= limit) {
+                            this.gameRunning = false;
+                            alert('Game Over');
+                            return;
+                        }
+                    }
+                }
             }
             
             nextBubble() {
