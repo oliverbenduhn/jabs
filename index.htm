@@ -577,25 +577,29 @@
             getNeighbors(row, col) {
                 const neighbors = [];
                 const isEvenRow = row % 2 === 0;
-                
+
+                const currentLength = this.grid[row] ? this.grid[row].length : 0;
+
                 // Standard neighbors
                 if (col > 0) neighbors.push({ r: row, c: col - 1 });
-                if (col < this.grid[row].length - 1) neighbors.push({ r: row, c: col + 1 });
-                
+                if (col + 1 < currentLength) neighbors.push({ r: row, c: col + 1 });
+
                 // Upper neighbors
                 if (row > 0) {
-                    neighbors.push({ r: row - 1, c: col });
-                    if (isEvenRow && col > 0) neighbors.push({ r: row - 1, c: col - 1 });
-                    if (!isEvenRow && col < this.grid[row].length - 1) neighbors.push({ r: row - 1, c: col + 1 });
+                    const upperLength = this.grid[row - 1] ? this.grid[row - 1].length : 0;
+                    if (col < upperLength) neighbors.push({ r: row - 1, c: col });
+                    if (isEvenRow && col > 0 && col - 1 < upperLength) neighbors.push({ r: row - 1, c: col - 1 });
+                    if (!isEvenRow && col + 1 < upperLength) neighbors.push({ r: row - 1, c: col + 1 });
                 }
-                
+
                 // Lower neighbors
-                if (row < this.grid.length - 1) {
-                    neighbors.push({ r: row + 1, c: col });
-                    if (isEvenRow && col > 0) neighbors.push({ r: row + 1, c: col - 1 });
-                    if (!isEvenRow && col < this.grid[row].length - 1) neighbors.push({ r: row + 1, c: col + 1 });
+                if (row + 1 < this.grid.length) {
+                    const lowerLength = this.grid[row + 1] ? this.grid[row + 1].length : 0;
+                    if (col < lowerLength) neighbors.push({ r: row + 1, c: col });
+                    if (isEvenRow && col > 0 && col - 1 < lowerLength) neighbors.push({ r: row + 1, c: col - 1 });
+                    if (!isEvenRow && col + 1 < lowerLength) neighbors.push({ r: row + 1, c: col + 1 });
                 }
-                
+
                 return neighbors;
             }
             
