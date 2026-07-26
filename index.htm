@@ -93,6 +93,7 @@
         canvas {
             display: block;
             background: transparent;
+            touch-action: none;
         }
 
         .shooter-area {
@@ -116,6 +117,11 @@
             border-radius: 50%;
             border: 3px solid rgba(255,255,255,0.3);
             background: #ccc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(0, 0, 0, 0.55);
+            font-size: 16px;
         }
 
         .shooter {
@@ -141,6 +147,15 @@
             top: 15px;
             left: 15px;
             z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(0, 0, 0, 0.55);
+            font-size: 20px;
+        }
+
+        .shooter-bubble--busy {
+            opacity: 0.5;
         }
 
         .power-ups {
@@ -171,6 +186,15 @@
             border-color: #ffd700;
         }
 
+        .power-up-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .power-up-btn:disabled:hover {
+            transform: none;
+        }
+
         .help-menu {
             display: flex;
             gap: 10px;
@@ -197,10 +221,10 @@
         }
 
         .trajectory-line {
-            stroke: #00bcd4;
+            stroke: #006978;
             stroke-width: 3;
             stroke-dasharray: 5,5;
-            opacity: 0.7;
+            opacity: 1;
         }
 
         .game-overlay {
@@ -254,12 +278,35 @@
             transform: scale(1.05);
         }
 
+        .overlay-btn + .overlay-btn {
+            margin-left: 10px;
+        }
+
+        .score-label {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-bottom: 2px;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
         @media (max-width: 768px) {
             .game-container {
                 flex-direction: column;
                 width: 100vw;
+                height: 100dvh;
             }
-            
+
             .sidebar {
                 width: 100%;
                 flex: none;
@@ -268,20 +315,28 @@
                 justify-content: space-around;
                 padding: 10px;
             }
-            
+
             .title {
                 font-size: 24px;
                 margin: 0;
             }
-            
+
             .score-item {
                 padding: 10px;
                 min-width: 80px;
             }
-            
+
             .game-area {
                 width: 100%;
+                flex: 1 1 auto;
+                min-height: 0;
                 border-radius: 0;
+            }
+
+            .shooter-area {
+                width: 100%;
+                justify-content: center;
+                flex-wrap: wrap;
             }
         }
     </style>
@@ -290,7 +345,9 @@
     <div class="game-container">
         <div class="game-area">
             <div class="canvas-container">
-                <canvas id="gameCanvas"></canvas>
+                <canvas id="gameCanvas" aria-label="Bubble-Shooter-Spielfeld">
+                    Dein Browser unterstützt das Canvas-Element nicht, das für dieses Spiel benötigt wird.
+                </canvas>
                 <svg id="trajectory" style="position: absolute; top: 0; left: 0; pointer-events: none;">
                     <line id="trajectoryLine" class="trajectory-line" style="display: none;"/>
                 </svg>
@@ -307,38 +364,65 @@
                         <div class="shooter-bubble" id="currentBubble"></div>
                     </div>
                     <div class="power-ups">
-                        <div class="power-up-btn" id="aimBtn">🎯</div>
-                        <div class="power-up-btn" id="bombBtn">💣</div>
+                        <button type="button" class="power-up-btn" id="aimBtn" aria-label="Zielhilfe" aria-pressed="false">🎯</button>
+                        <button type="button" class="power-up-btn" id="bombBtn" aria-label="Bombe" aria-pressed="false">💣</button>
                     </div>
                 </div>
             </div>
-            <div id="gameOverlay" class="game-overlay hidden">
+            <div id="gameOverlay" class="game-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="overlayTitle" aria-describedby="overlayMessage">
                 <div class="game-overlay__content">
                     <h2 id="overlayTitle">Game Over</h2>
                     <p id="overlayMessage"></p>
                     <button id="restartBtn" class="overlay-btn">Neustart</button>
                 </div>
             </div>
+            <div id="helpOverlay" class="game-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+                <div class="game-overlay__content">
+                    <h2 id="helpTitle">Spielanleitung</h2>
+                    <p>Ziehe mit Maus oder Finger, um zu zielen, und lass los, um zu schießen.</p>
+                    <p>Mit den Pfeiltasten zielen und mit Leertaste oder Enter schießen.</p>
+                    <p>Verbinde 3 oder mehr gleichfarbige Bubbles, um sie zu entfernen.</p>
+                    <p>🎯 Zielhilfe erweitert den Schusswinkel für den nächsten Schuss. 💣 Bombe entfernt die getroffene Bubble und ihre Nachbarn.</p>
+                    <button type="button" id="helpCloseBtn" class="overlay-btn">Schließen</button>
+                </div>
+            </div>
+            <div id="menuOverlay" class="game-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+                <div class="game-overlay__content">
+                    <h2 id="menuTitle">Pause</h2>
+                    <p>Punkte: <span id="menuScore">0</span></p>
+                    <button type="button" id="resumeBtn" class="overlay-btn">Fortsetzen</button>
+                    <button type="button" id="menuRestartBtn" class="overlay-btn">Neustart</button>
+                </div>
+            </div>
         </div>
-        
+
         <div class="sidebar">
             <div class="title">BUBBLE<br>SHOOTER</div>
-            
+
             <div class="score-item">
-                <div class="score-icon">⭐</div>
+                <div class="score-icon" aria-hidden="true">⭐</div>
+                <div class="score-label">Level</div>
                 <div class="score-value" id="level">1</div>
             </div>
-            
+
             <div class="score-item">
-                <div class="score-icon">🏆</div>
+                <div class="score-icon" aria-hidden="true">🏆</div>
+                <div class="score-label">Punkte</div>
                 <div class="score-value" id="score">0</div>
             </div>
-            
+
+            <div class="score-item">
+                <div class="score-icon" aria-hidden="true">🥇</div>
+                <div class="score-label">Highscore</div>
+                <div class="score-value" id="highscore">0</div>
+            </div>
+
             <div class="help-menu">
-                <div class="help-btn" id="helpBtn">?</div>
-                <div class="help-btn" id="menuBtn">☰</div>
+                <button type="button" class="help-btn" id="helpBtn" aria-label="Hilfe anzeigen" aria-haspopup="dialog">?</button>
+                <button type="button" class="help-btn" id="menuBtn" aria-label="Menü öffnen" aria-haspopup="dialog">☰</button>
             </div>
         </div>
+        <div id="srStatus" class="sr-only" role="status" aria-live="polite"></div>
     </div>
 
     <script>
@@ -354,27 +438,59 @@
                 this.overlayTitle = document.getElementById('overlayTitle');
                 this.overlayMessage = document.getElementById('overlayMessage');
                 this.restartBtn = document.getElementById('restartBtn');
-                
+                this.helpBtn = document.getElementById('helpBtn');
+                this.menuBtn = document.getElementById('menuBtn');
+                this.helpOverlay = document.getElementById('helpOverlay');
+                this.helpCloseBtn = document.getElementById('helpCloseBtn');
+                this.menuOverlay = document.getElementById('menuOverlay');
+                this.menuScoreEl = document.getElementById('menuScore');
+                this.resumeBtn = document.getElementById('resumeBtn');
+                this.menuRestartBtn = document.getElementById('menuRestartBtn');
+                this.srStatus = document.getElementById('srStatus');
+                this.highscoreEl = document.getElementById('highscore');
+                this.currentBubbleEl = document.getElementById('currentBubble');
+
                 this.topPadding = 0;
                 this.bubbleRadius = 20;
                 this.gridTopOffset = this.topPadding + this.bubbleRadius;
                 this.rowHeight = this.bubbleRadius * Math.sqrt(3);
                 this.topBoundary = this.gridTopOffset - this.bubbleRadius;
+                this.radiusScaleFactor = 1;
                 this.colors = ['#ff595e', '#ffca3a', '#8ac926', '#1982c4', '#6a4c93', '#ff924c', '#2ec4b6', '#f72585'];
+                // Distinct glyph per color so matching doesn't rely on color
+                // perception alone (colorblind-accessible).
+                this.colorSymbols = {
+                    '#ff595e': '●',
+                    '#ffca3a': '▲',
+                    '#8ac926': '■',
+                    '#1982c4': '◆',
+                    '#6a4c93': '★',
+                    '#ff924c': '✚',
+                    '#2ec4b6': '▼',
+                    '#f72585': '◉',
+                };
                 this.grid = [];
                 this.currentBubble = null;
                 this.nextBubbles = [];
                 this.score = 0;
+                this.highscore = 0;
                 this.level = 1;
                 this.gameRunning = true;
+                this.paused = false;
+                this.activeDialogTrigger = null;
                 this.shotsFired = 0;
                 this.shotsPerRow = 5;
                 this.activeBubble = null;
                 this.baseAngleLimit = Math.PI / 2.5;
                 this.aimAngleLimit = Math.PI / 1.8;
                 this.currentAngleLimit = this.baseAngleLimit;
+                this.keyboardAimDelta = 0;
+                this.keyboardAimStep = Math.PI / 36;
                 this.aimAssistShots = 0;
                 this.bombArmed = false;
+                this.maxPowerUpCharges = 1;
+                this.bombCharges = this.maxPowerUpCharges;
+                this.aimCharges = this.maxPowerUpCharges;
                 this.columnCount = 0;
                 this.rowOffsets = [];
                 this.fixedColumns = 15;
@@ -385,18 +501,20 @@
                 this.gridRightEdge = this.canvas.width;
                 this.gridWidth = this.canvas.width;
                 
-                this.resizeCanvas();
-                window.addEventListener('resize', () => this.resizeCanvas());
-                
                 this.shooter = {
                     x: this.canvas.width / 2,
                     y: this.canvas.height - 100,
                     angle: -Math.PI / 2
                 };
-                
+
+                this.resizeCanvas();
+
+                this.loopHandle = null;
+                this.lastFrameTime = null;
+
                 this.initializeGame();
                 this.setupEventListeners();
-                this.gameLoop();
+                this.startGameLoop();
             }
             
             resizeCanvas() {
@@ -484,6 +602,7 @@
             }
 
             updateGridMetrics(availableWidth, availableHeight) {
+                const previousRadius = this.bubbleRadius;
                 this.columnCount = this.fixedColumns;
                 const widthUnits = Math.max(this.columnCount * 2 + 1, 1);
                 const fallbackWidth = this.gridWidth || this.canvas.width || widthUnits * this.bubbleRadius;
@@ -505,6 +624,7 @@
                 this.rowHeight = this.bubbleRadius * Math.sqrt(3);
                 this.gridTopOffset = this.topPadding + this.bubbleRadius;
                 this.topBoundary = this.gridTopOffset - this.bubbleRadius;
+                this.radiusScaleFactor = previousRadius > 0 ? this.bubbleRadius / previousRadius : 1;
 
                 const usedWidth = widthUnits * this.bubbleRadius;
                 this.gridWidth = usedWidth;
@@ -530,6 +650,12 @@
                     }
                 }
                 if (this.activeBubble) {
+                    // Rescale the flying bubble's position by the same factor
+                    // the grid just scaled by, so a resize/rotation mid-shot
+                    // doesn't teleport or drop it relative to the board.
+                    const scale = this.radiusScaleFactor || 1;
+                    this.activeBubble.x *= scale;
+                    this.activeBubble.y *= scale;
                     this.activeBubble.radius = this.bubbleRadius;
                     this.activeBubble.x = Math.max(this.gridLeftEdge + this.bubbleRadius, Math.min(this.gridRightEdge - this.bubbleRadius, this.activeBubble.x));
                 }
@@ -596,31 +722,13 @@
             }
             
             setupEventListeners() {
-                // Mouse events
-                this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
-                this.canvas.addEventListener('click', (e) => this.handleClick(e));
-                
-                // Touch events for mobile
-                this.canvas.addEventListener('touchmove', (e) => {
-                    e.preventDefault();
-                    const touch = e.touches[0];
-                    const rect = this.canvas.getBoundingClientRect();
-                    const mouseEvent = new MouseEvent('mousemove', {
-                        clientX: touch.clientX,
-                        clientY: touch.clientY
-                    });
-                    this.handleMouseMove(mouseEvent);
-                });
-                
-                this.canvas.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    const touch = e.touches[0];
-                    const mouseEvent = new MouseEvent('click', {
-                        clientX: touch.clientX,
-                        clientY: touch.clientY
-                    });
-                    this.handleClick(mouseEvent);
-                });
+                // Unified pointer events: aim on down/move, shoot on release.
+                // This lets touch users drag to aim before firing, the same
+                // way mouse users can move before clicking.
+                this.canvas.addEventListener('pointermove', (e) => this.handlePointerMove(e));
+                this.canvas.addEventListener('pointerdown', (e) => this.handlePointerDown(e));
+                this.canvas.addEventListener('pointerup', (e) => this.handlePointerUp(e));
+                this.canvas.addEventListener('pointercancel', () => this.handlePointerCancel());
 
                 if (this.aimBtn) {
                     this.aimBtn.addEventListener('click', () => this.activateAimPowerUp());
@@ -633,43 +741,189 @@
                 if (this.restartBtn) {
                     this.restartBtn.addEventListener('click', () => this.restartGame());
                 }
+
+                if (this.helpBtn) {
+                    this.helpBtn.addEventListener('click', () => this.openHelp());
+                }
+                if (this.helpCloseBtn) {
+                    this.helpCloseBtn.addEventListener('click', () => this.closeHelp());
+                }
+
+                if (this.menuBtn) {
+                    this.menuBtn.addEventListener('click', () => this.openMenu());
+                }
+                if (this.resumeBtn) {
+                    this.resumeBtn.addEventListener('click', () => this.closeMenu());
+                }
+                if (this.menuRestartBtn) {
+                    this.menuRestartBtn.addEventListener('click', () => {
+                        this.closeMenu();
+                        this.restartGame();
+                    });
+                }
+
+                window.addEventListener('keydown', (e) => this.handleKeyDown(e));
+
+                // Throttle to one resizeCanvas() per animation frame instead
+                // of once per resize/rotation event.
+                window.addEventListener('resize', () => {
+                    if (this.resizeScheduled) return;
+                    this.resizeScheduled = true;
+                    requestAnimationFrame(() => {
+                        this.resizeScheduled = false;
+                        this.resizeCanvas();
+                    });
+                });
+            }
+
+            handleKeyDown(e) {
+                if (e.key === 'Escape') {
+                    if (this.helpOverlay && !this.helpOverlay.classList.contains('hidden')) {
+                        this.closeHelp();
+                    } else if (this.menuOverlay && !this.menuOverlay.classList.contains('hidden')) {
+                        this.closeMenu();
+                    }
+                    return;
+                }
+
+                if (!this.gameRunning || this.paused) return;
+                if (this.helpOverlay && !this.helpOverlay.classList.contains('hidden')) return;
+                if (this.menuOverlay && !this.menuOverlay.classList.contains('hidden')) return;
+
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    const direction = e.key === 'ArrowLeft' ? -1 : 1;
+                    this.keyboardAimDelta = Math.max(
+                        -this.currentAngleLimit,
+                        Math.min(this.currentAngleLimit, this.keyboardAimDelta + direction * this.keyboardAimStep)
+                    );
+                    const upAngle = -Math.PI / 2;
+                    const angle = upAngle + this.keyboardAimDelta;
+                    this.shooter.angle = angle;
+                    const aim = { angle, dirX: Math.cos(angle), dirY: Math.sin(angle) };
+                    this.lastAimX = this.shooter.x + aim.dirX * 200;
+                    this.lastAimY = this.shooter.y + aim.dirY * 200;
+                    this.updateTrajectory(aim);
+                } else if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    if (this.lastAimX === undefined) {
+                        const upAngle = -Math.PI / 2;
+                        this.lastAimX = this.shooter.x;
+                        this.lastAimY = this.shooter.y - 200;
+                    }
+                    this.shootBubble(this.lastAimX, this.lastAimY);
+                    if (this.trajectoryLine) this.trajectoryLine.style.display = 'none';
+                }
+            }
+
+            openHelp() {
+                this.openDialog(this.helpOverlay, this.helpCloseBtn, this.helpBtn);
+            }
+
+            closeHelp() {
+                this.closeDialog(this.helpOverlay);
+            }
+
+            openMenu() {
+                if (!this.gameRunning) return;
+                this.paused = true;
+                if (this.menuScoreEl) this.menuScoreEl.textContent = this.score;
+                this.openDialog(this.menuOverlay, this.resumeBtn, this.menuBtn);
+            }
+
+            closeMenu() {
+                this.paused = false;
+                this.closeDialog(this.menuOverlay);
+                this.startGameLoop();
+            }
+
+            openDialog(overlayEl, focusEl, triggerEl) {
+                if (!overlayEl) return;
+                this.activeDialogTrigger = triggerEl || null;
+                overlayEl.classList.remove('hidden');
+                if (focusEl && focusEl.focus) focusEl.focus();
+            }
+
+            closeDialog(overlayEl) {
+                if (!overlayEl) return;
+                overlayEl.classList.add('hidden');
+                if (this.activeDialogTrigger && this.activeDialogTrigger.focus) {
+                    this.activeDialogTrigger.focus();
+                }
+                this.activeDialogTrigger = null;
+            }
+
+            announce(message) {
+                if (this.srStatus) this.srStatus.textContent = message;
             }
             
-            handleMouseMove(e) {
+            handlePointerMove(e) {
+                if (this.paused) return;
                 const rect = this.canvas.getBoundingClientRect();
                 const rawX = e.clientX - rect.left;
                 const mouseY = e.clientY - rect.top;
                 const mouseX = this.clampAimX(rawX);
 
-                const dx = mouseX - this.shooter.x;
-                const dy = mouseY - this.shooter.y;
-                this.shooter.angle = Math.atan2(dy, dx);
-                
-                // Limit shooting angle
-                const angleLimit = this.currentAngleLimit;
-                if (this.shooter.angle > angleLimit) this.shooter.angle = angleLimit;
-                if (this.shooter.angle < -angleLimit) this.shooter.angle = -angleLimit;
-                
-                this.updateTrajectory(mouseX, mouseY);
+                const aim = this.resolveAim(mouseX, mouseY);
+                this.shooter.angle = aim.angle;
+                this.lastAimX = mouseX;
+                this.lastAimY = mouseY;
+
+                this.updateTrajectory(aim);
             }
-            
-            updateTrajectory(mouseX, mouseY) {
+
+            handlePointerDown(e) {
+                if (this.paused) return;
+                e.preventDefault();
+                if (this.canvas.setPointerCapture) {
+                    this.canvas.setPointerCapture(e.pointerId);
+                }
+                this.isAiming = true;
+                this.handlePointerMove(e);
+            }
+
+            handlePointerUp(e) {
+                if (!this.isAiming) return;
+                this.isAiming = false;
+                if (this.canvas.hasPointerCapture && this.canvas.hasPointerCapture(e.pointerId)) {
+                    this.canvas.releasePointerCapture(e.pointerId);
+                }
+                this.handlePointerMove(e);
+                this.trajectoryLine.style.display = 'none';
+                if (!this.gameRunning) return;
+                this.shootBubble(this.lastAimX, this.lastAimY);
+            }
+
+            handlePointerCancel() {
+                this.isAiming = false;
+            }
+
+            // Single source of truth for aiming: clamps the angle around the
+            // upward axis (-90°) so the preview line and the actual shot
+            // always agree on the same direction vector.
+            resolveAim(targetX, targetY) {
+                const dx = targetX - this.shooter.x;
+                const dy = targetY - this.shooter.y;
+                const upAngle = -Math.PI / 2;
+                let delta = Math.atan2(dy, dx) - upAngle;
+                while (delta > Math.PI) delta -= Math.PI * 2;
+                while (delta < -Math.PI) delta += Math.PI * 2;
+
+                const limit = this.currentAngleLimit;
+                delta = Math.max(-limit, Math.min(limit, delta));
+
+                const angle = upAngle + delta;
+                return { angle, dirX: Math.cos(angle), dirY: Math.sin(angle) };
+            }
+
+            updateTrajectory(aim) {
                 const line = this.trajectoryLine;
                 const startX = this.shooter.x;
                 const startY = this.shooter.y;
-                
-                // Calculate trajectory
-                const dx = mouseX - startX;
-                const dy = mouseY - startY;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                if (distance < 0.0001) {
-                    line.style.display = 'none';
-                    return;
-                }
+
                 const maxDistance = this.aimAssistShots > 0 ? 280 : 200;
-                
-                const endX = startX + (dx / distance) * Math.min(distance, maxDistance);
-                const endY = startY + (dy / distance) * Math.min(distance, maxDistance);
+                const endX = startX + aim.dirX * maxDistance;
+                const endY = startY + aim.dirY * maxDistance;
 
                 let finalEndX = endX;
                 let finalEndY = endY;
@@ -699,33 +953,24 @@
                 line.style.display = 'block';
             }
             
-            handleClick(e) {
-                if (!this.gameRunning) return;
-                
-                const rect = this.canvas.getBoundingClientRect();
-                const rawX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
-                const mouseX = this.clampAimX(rawX);
-                
-                this.shootBubble(mouseX, mouseY);
-                this.trajectoryLine.style.display = 'none';
-            }
-            
             shootBubble(targetX, targetY) {
-                const aimX = this.clampAimX(targetX);
-                const dx = aimX - this.shooter.x;
-                const dy = targetY - this.shooter.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                if (distance < 0.0001 || this.activeBubble) {
+                if (this.activeBubble) {
                     return;
                 }
-                
-                const speed = 8;
+
+                const aimX = this.clampAimX(targetX);
+                const aim = this.resolveAim(aimX, targetY);
+                this.shooter.angle = aim.angle;
+
+                // 480px/s ≈ the old fixed 8px-per-frame step at 60fps, now
+                // resolved with real elapsed time so speed no longer depends
+                // on the display's refresh rate.
                 const bubble = {
                     x: this.shooter.x,
                     y: this.shooter.y,
-                    vx: (dx / distance) * speed,
-                    vy: (dy / distance) * speed,
+                    dirX: aim.dirX,
+                    dirY: aim.dirY,
+                    speed: 480,
                     color: this.currentBubble,
                     radius: this.bubbleRadius,
                     powerUp: null
@@ -748,38 +993,47 @@
                 this.animateBubble(bubble);
                 this.nextBubble();
                 this.shotsFired++;
-                if (this.shotsFired % this.shotsPerRow === 0) {
-                    this.addRow();
-                }
             }
             
             animateBubble(bubble) {
                 this.activeBubble = bubble;
             }
 
-            updateActiveBubble() {
+            updateActiveBubble(deltaMs) {
                 if (!this.activeBubble) return;
-                
+
                 const bubble = this.activeBubble;
-                bubble.x += bubble.vx;
-                bubble.y += bubble.vy;
+                const dt = deltaMs / 1000;
+                const stepDistance = bubble.speed * dt;
+                // Substep the movement so fast frames (or small bubbles) can't
+                // tunnel through a grid bubble between two collision checks.
+                const maxStepSize = Math.max(bubble.radius * 0.5, 1);
+                const steps = Math.min(50, Math.max(1, Math.ceil(stepDistance / maxStepSize)));
+                const singleStepDistance = stepDistance / steps;
 
                 const leftEdge = this.gridLeftEdge;
                 const rightEdge = this.gridRightEdge;
-                if (bubble.x - bubble.radius <= leftEdge || bubble.x + bubble.radius >= rightEdge) {
-                    bubble.vx = -bubble.vx;
-                    bubble.x = Math.max(leftEdge + bubble.radius, Math.min(rightEdge - bubble.radius, bubble.x));
-                }
 
-                const collision = this.checkCollision(bubble);
-                if (collision || bubble.y <= this.topBoundary) {
-                    this.placeBubble(bubble);
-                    this.activeBubble = null;
-                    return;
-                }
+                for (let i = 0; i < steps; i++) {
+                    bubble.x += bubble.dirX * singleStepDistance;
+                    bubble.y += bubble.dirY * singleStepDistance;
 
-                if (bubble.y - bubble.radius > this.canvas.height) {
-                    this.activeBubble = null;
+                    if (bubble.x - bubble.radius <= leftEdge || bubble.x + bubble.radius >= rightEdge) {
+                        bubble.dirX = -bubble.dirX;
+                        bubble.x = Math.max(leftEdge + bubble.radius, Math.min(rightEdge - bubble.radius, bubble.x));
+                    }
+
+                    const collision = this.checkCollision(bubble);
+                    if (collision || bubble.y <= this.topBoundary) {
+                        this.placeBubble(bubble, collision);
+                        this.activeBubble = null;
+                        return;
+                    }
+
+                    if (bubble.y - bubble.radius > this.canvas.height) {
+                        this.activeBubble = null;
+                        return;
+                    }
                 }
             }
 
@@ -791,26 +1045,57 @@
                     this.setPowerUpState(this.aimBtn, false);
                     return;
                 }
+                if (this.aimCharges <= 0) return;
+                this.aimCharges--;
                 this.aimAssistShots = 1;
                 this.currentAngleLimit = this.aimAngleLimit;
                 this.setPowerUpState(this.aimBtn, true);
+                this.updatePowerUpAvailability();
             }
 
             activateBombPowerUp() {
                 if (!this.gameRunning) return;
-                this.bombArmed = !this.bombArmed;
-                this.setPowerUpState(this.bombBtn, this.bombArmed);
+                if (this.bombArmed) {
+                    this.bombArmed = false;
+                    this.setPowerUpState(this.bombBtn, false);
+                    return;
+                }
+                if (this.bombCharges <= 0) return;
+                this.bombCharges--;
+                this.bombArmed = true;
+                this.setPowerUpState(this.bombBtn, true);
+                this.updatePowerUpAvailability();
             }
 
             setPowerUpState(button, active) {
                 if (!button) return;
                 button.classList.toggle('active', active);
+                button.setAttribute('aria-pressed', active ? 'true' : 'false');
+            }
+
+            // A charge is consumed the moment a power-up is armed, not when
+            // it's fired — matches docs/wiki/powerups.md's "max one charge
+            // per level" rule instead of allowing infinite re-arming.
+            updatePowerUpAvailability() {
+                if (this.aimBtn) {
+                    const canArm = this.aimCharges > 0 || this.aimAssistShots > 0;
+                    this.aimBtn.disabled = !canArm;
+                    this.aimBtn.setAttribute('aria-label', `Zielhilfe (${Math.max(this.aimCharges, 0)} übrig)`);
+                }
+                if (this.bombBtn) {
+                    const canArm = this.bombCharges > 0 || this.bombArmed;
+                    this.bombBtn.disabled = !canArm;
+                    this.bombBtn.setAttribute('aria-label', `Bombe (${Math.max(this.bombCharges, 0)} übrig)`);
+                }
             }
 
             resetPowerUps() {
                 this.aimAssistShots = 0;
                 this.bombArmed = false;
                 this.currentAngleLimit = this.baseAngleLimit;
+                this.bombCharges = this.maxPowerUpCharges;
+                this.aimCharges = this.maxPowerUpCharges;
+                this.updatePowerUpAvailability();
                 this.setPowerUpState(this.aimBtn, false);
                 this.setPowerUpState(this.bombBtn, false);
             }
@@ -842,12 +1127,12 @@
                 if (this.overlayMessage) {
                     this.overlayMessage.textContent = message;
                 }
-                this.overlay.classList.remove('hidden');
+                this.announce(`${title}. ${message}`);
+                this.openDialog(this.overlay, this.restartBtn, null);
             }
 
             hideOverlay() {
-                if (!this.overlay) return;
-                this.overlay.classList.add('hidden');
+                this.closeDialog(this.overlay);
             }
 
             triggerGameOver() {
@@ -855,15 +1140,23 @@
                 this.gameRunning = false;
                 this.activeBubble = null;
                 this.resetPowerUps();
+                if (this.score > this.highscore) {
+                    this.highscore = this.score;
+                }
+                this.updateUI();
                 this.showOverlay('Game Over', `Punkte: ${this.score}`);
             }
 
             restartGame() {
                 this.hideOverlay();
+                if (this.score > this.highscore) {
+                    this.highscore = this.score;
+                }
                 this.score = 0;
                 this.level = 1;
                 this.shotsFired = 0;
                 this.gameRunning = true;
+                this.paused = false;
                 this.activeBubble = null;
                 this.resetPowerUps();
                 this.createInitialGrid();
@@ -873,6 +1166,7 @@
                 if (this.trajectoryLine) {
                     this.trajectoryLine.style.display = 'none';
                 }
+                this.startGameLoop();
             }
             
             checkCollision(bubble) {
@@ -896,68 +1190,110 @@
                 return null;
             }
             
-            placeBubble(bubble) {
-                const { row, col } = this.findBestPosition(bubble.x, bubble.y);
-                
-                if (row >= 0 && col >= 0) {
-                    if (!this.grid[row]) {
-                        this.grid[row] = new Array(this.columnCount);
-                    } else if (this.grid[row].length < this.columnCount) {
-                        this.grid[row].length = this.columnCount;
-                    }
-                    if (this.rowOffsets[row] === undefined) {
-                        if (row === 0) {
-                            this.rowOffsets[row] = 0;
-                        } else {
-                            const previousFlag = this.getRowOffsetFlag(row - 1);
-                            this.rowOffsets[row] = previousFlag === 0 ? 1 : 0;
-                        }
-                    }
+            placeBubble(bubble, collision) {
+                const { row, col } = this.findBestPosition(bubble.x, bubble.y, collision);
 
-                    this.grid[row][col] = this.createBubble(row, col, bubble.color);
+                if (row < 0 || col < 0) return;
 
-                    if (bubble.powerUp === 'bomb') {
-                        const removed = this.removeBombCluster(row, col);
-                        if (removed > 0) {
-                            this.score += removed * 15;
-                            this.updateUI();
-                        }
-                        this.removeFloatingBubbles();
-                        if (this.checkWinCondition()) {
-                            this.nextLevel();
-                        }
-                        this.checkGameOver();
-                        return;
+                if (!this.grid[row]) {
+                    this.grid[row] = new Array(this.columnCount);
+                } else if (this.grid[row].length < this.columnCount) {
+                    this.grid[row].length = this.columnCount;
+                }
+                this.getRowOffsetFlag(row);
+
+                if (bubble.powerUp === 'bomb') {
+                    // Explode around the bubble that was actually hit, not the
+                    // freshly placed one — the projectile itself never joins the grid.
+                    const target = collision || { row, col };
+                    const removed = this.removeBombCluster(target.row, target.col);
+                    if (removed > 0) {
+                        this.score += removed * 15;
+                        this.updateUI();
                     }
-                    
-                    this.checkMatches(row, col);
+                    this.removeFloatingBubbles();
+                    this.resolveTurn();
+                    return;
+                }
+
+                this.grid[row][col] = this.createBubble(row, col, bubble.color);
+                this.checkMatches(row, col);
+                this.resolveTurn();
+            }
+
+            // Completes a turn only after the shot's own effects (placement,
+            // matches, floating bubbles) are fully resolved, so a row-push
+            // and its game-over check never race a shot that could still
+            // save the board.
+            resolveTurn() {
+                if (this.checkWinCondition()) {
+                    this.nextLevel();
+                    return;
+                }
+                if (this.shotsFired % this.shotsPerRow === 0) {
+                    this.addRow();
+                } else {
                     this.checkGameOver();
                 }
             }
-            
-            findBestPosition(x, y) {
-                let bestRow = -1;
-                let bestCol = -1;
-                let minDistance = Infinity;
 
-                const maxRows = this.grid.length + 1;
-                for (let row = 0; row < maxRows; row++) {
-                    const rowArray = this.grid[row] ? this.grid[row] : [];
-                    const cols = this.columnCount;
+            // Coordinates of empty cells adjacent to (row, col), following the
+            // same hex-neighbor topology as getNeighbors().
+            getLocalCandidates(row, col) {
+                const flag = this.getRowOffsetFlag(row);
+                const deltas = flag === 0
+                    ? [[0, -1], [0, 1], [-1, -1], [-1, 0], [1, -1], [1, 0]]
+                    : [[0, -1], [0, 1], [-1, 0], [-1, 1], [1, 0], [1, 1]];
+                const candidates = [];
+                deltas.forEach(([dr, dc]) => {
+                    const r = row + dr;
+                    const c = col + dc;
+                    if (r < 0 || c < 0 || c >= this.columnCount) return;
+                    const rowArray = this.grid[r];
+                    if (rowArray && rowArray[c]) return;
+                    candidates.push({ row: r, col: c });
+                });
+                return candidates;
+            }
 
-                    for (let col = 0; col < cols; col++) {
-                        if (rowArray[col]) continue;
-
-                        const { x: gridX, y: gridY } = this.getBubblePosition(row, col);
-                        const distance = Math.hypot(x - gridX, y - gridY);
-
-                        if (distance < minDistance) {
-                            minDistance = distance;
-                            bestRow = row;
-                            bestCol = col;
+            findBestPosition(x, y, collision) {
+                let candidates;
+                if (collision) {
+                    candidates = this.getLocalCandidates(collision.row, collision.col);
+                } else {
+                    candidates = [];
+                    const topRow = this.grid[0];
+                    for (let col = 0; col < this.columnCount; col++) {
+                        if (!topRow || !topRow[col]) {
+                            candidates.push({ row: 0, col });
                         }
                     }
                 }
+
+                if (candidates.length === 0) {
+                    // Fallback: no free local slot (fully packed pocket) —
+                    // search the whole grid so the bubble doesn't vanish.
+                    const maxRows = this.grid.length + 1;
+                    for (let row = 0; row < maxRows; row++) {
+                        const rowArray = this.grid[row] ? this.grid[row] : [];
+                        for (let col = 0; col < this.columnCount; col++) {
+                            if (!rowArray[col]) candidates.push({ row, col });
+                        }
+                    }
+                }
+
+                let bestRow = -1;
+                let bestCol = -1;
+                let minDistance = Infinity;
+                candidates.forEach(({ row, col }) => {
+                    const { x: gridX, y: gridY } = this.getBubblePosition(row, col);
+                    const distance = Math.hypot(x - gridX, y - gridY);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        bestRow = row;
+                        bestCol = col;
+                    }
+                });
 
                 return { row: bestRow, col: bestCol };
             }
@@ -971,17 +1307,12 @@
                     matches.forEach(({ r, c }) => {
                         delete this.grid[r][c];
                     });
-                    
+
                     this.score += matches.length * 10;
                     this.updateUI();
-                    
+
                     // Check for floating bubbles
                     this.removeFloatingBubbles();
-                    
-                    // Check win condition
-                    if (this.checkWinCondition()) {
-                        this.nextLevel();
-                    }
                 }
             }
             
@@ -1005,7 +1336,7 @@
             
             getNeighbors(row, col) {
                 const neighbors = [];
-                const deltas = row % 2 === 0
+                const deltas = this.getRowOffsetFlag(row) === 0
                     ? [[0, -1], [0, 1], [-1, -1], [-1, 0], [1, -1], [1, 0]]
                     : [[0, -1], [0, 1], [-1, 0], [-1, 1], [1, 0], [1, 1]];
 
@@ -1073,6 +1404,7 @@
             
             nextLevel() {
                 this.level++;
+                this.shotsFired = 0;
                 this.resetPowerUps();
                 this.createInitialGrid();
                 this.generateNextBubbles();
@@ -1122,17 +1454,23 @@
             updateUI() {
                 document.getElementById('score').textContent = this.score;
                 document.getElementById('level').textContent = this.level;
-                
+                if (this.highscoreEl) {
+                    this.highscoreEl.textContent = Math.max(this.highscore, this.score);
+                }
+
+
                 // Update current bubble
-                const currentBubbleEl = document.getElementById('currentBubble');
+                const currentBubbleEl = this.currentBubbleEl;
                 currentBubbleEl.style.background = `radial-gradient(circle, ${this.currentBubble}, ${this.darkenColor(this.currentBubble)})`;
-                
+                currentBubbleEl.textContent = this.colorSymbols[this.currentBubble] || '';
+
                 // Update queue
                 for (let i = 0; i < 5; i++) {
                     const queueEl = document.getElementById(`queue${i + 1}`);
                     if (this.nextBubbles[i]) {
                         queueEl.style.background = `radial-gradient(circle, ${this.nextBubbles[i]}, ${this.darkenColor(this.nextBubbles[i])})`;
                         queueEl.style.border = `3px solid ${this.darkenColor(this.nextBubbles[i])}`;
+                        queueEl.textContent = this.colorSymbols[this.nextBubbles[i]] || '';
                     }
                 }
             }
@@ -1171,7 +1509,17 @@
                 this.ctx.beginPath();
                 this.ctx.arc(x - radius/3, y - radius/3, radius/3, 0, Math.PI * 2);
                 this.ctx.fill();
-                
+
+                // Color-independent symbol for colorblind accessibility.
+                const symbol = this.colorSymbols[color];
+                if (symbol) {
+                    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+                    this.ctx.font = `${Math.max(radius, 1)}px sans-serif`;
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+                    this.ctx.fillText(symbol, x, y);
+                }
+
                 this.ctx.restore();
             }
             
@@ -1183,11 +1531,27 @@
                 return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
             }
             
-            gameLoop() {
+            gameLoop(timestamp) {
+                // Stop scheduling frames once the game isn't actively running —
+                // restartGame()/closeMenu() call startGameLoop() to resume.
+                if (!this.gameRunning || this.paused) {
+                    this.loopHandle = null;
+                    this.lastFrameTime = null;
+                    return;
+                }
+
+                const lastTime = this.lastFrameTime ?? timestamp;
+                const deltaMs = Math.min(timestamp - lastTime, 100);
+                this.lastFrameTime = timestamp;
+
                 this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-                this.updateActiveBubble();
-                
+                if (this.currentBubbleEl) {
+                    this.currentBubbleEl.classList.toggle('shooter-bubble--busy', !!this.activeBubble);
+                }
+
+                this.updateActiveBubble(deltaMs);
+
                 // Draw grid
                 for (let row = 0; row < this.grid.length; row++) {
                     for (let col = 0; col < this.grid[row].length; col++) {
@@ -1201,8 +1565,14 @@
                 if (this.activeBubble) {
                     this.drawBubble(this.activeBubble.x, this.activeBubble.y, this.activeBubble.color, this.activeBubble.radius);
                 }
-                
-                requestAnimationFrame(() => this.gameLoop());
+
+                this.loopHandle = requestAnimationFrame((t) => this.gameLoop(t));
+            }
+
+            startGameLoop() {
+                if (this.loopHandle) return;
+                this.lastFrameTime = null;
+                this.loopHandle = requestAnimationFrame((t) => this.gameLoop(t));
             }
         }
         
