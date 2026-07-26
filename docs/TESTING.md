@@ -10,7 +10,7 @@
 | Ebene | Tool | Datei | Was wird geprüft |
 |---|---|---|---|
 | Syntax | `node:vm` `Script` | `test/check-syntax.mjs` | Inline `<script>` in `index.htm` ist valides JavaScript |
-| Logik-Smoke | `node:vm` `createContext` + DOM-Stubs | `test/logic-smoke.mjs` | 6 Invarianten der Spiellogik |
+| Logik-Smoke | `node:vm` `createContext` + DOM-Stubs | `test/logic-smoke.mjs` | 8 Invarianten der Spiellogik |
 | CI | GitHub Actions | `.github/workflows/test.yml` | Beide Tests bei jedem Push und PR |
 | Manuell | Browser + DevTools | – | Visuelle Korrektheit, Mobile, Accessibility |
 
@@ -34,7 +34,7 @@ new vm.Script(scriptSrc, { filename: 'index.htm (inline script)' });
 
 ### 2.2 Logik-Smoke (`logic-smoke.mjs`)
 
-Sechs Invarianten, die direkt aus dem Audit abgeleitet sind:
+Acht Invarianten, die direkt aus Audit und Persistenz-Anforderung abgeleitet sind:
 
 | # | Test | Schützt vor |
 |---|---|---|
@@ -43,7 +43,9 @@ Sechs Invarianten, die direkt aus dem Audit abgeleitet sind:
 | 3 | `shootBubble never launches a bubble downward` | Audit "Hoch – Abwärtsschüsse" |
 | 4 | `placeBubble lands on a free neighbor of the collided bubble` | Audit "Hoch – Projektil teleportiert in ferne Zelle" |
 | 5 | `shootBubble does not push a row synchronously; resolveTurn does` | Audit "Hoch – 5. Schuss kann Game-Over vor Auflösung auslösen" |
-| 6 | `bomb charge is consumed on arm and blocks a second arm` + `resetPowerUps()` | Audit "Hoch – Power-Ups ohne Verbrauchsressource" |
+| 6 | `bomb charge is consumed on arm and blocks a second arm` | Audit "Hoch – Power-Ups ohne Verbrauchsressource" |
+| 7 | `resetPowerUps() restores one charge per power-up` | Power-Up-Aufladungen werden nach Reset nicht wiederhergestellt |
+| 8 | `a reload ... restores grid/score/level` + `a reload does not refill a spent bomb charge` | Reload verliert Fortschritt oder füllt ausgegebene Aufladungen auf |
 
 Jeder Test:
 1. Erstellt ein DOM-Stub-Set (siehe `makeElement()` / `createGame()`).
@@ -61,7 +63,8 @@ Jeder Test:
 | Aim-Pfad im Schuss (`shootBubble`) | ✅ | #3 |
 | Lokale Platzierung (`placeBubble`) | ✅ | #4 |
 | Turn-Resolution (`resolveTurn` vs. `shootBubble`) | ✅ | #5 |
-| Power-Up-Charges (`bombCharges`, `aimCharges`) | ✅ | #6 |
+| Power-Up-Charges (`bombCharges`, `aimCharges`) | ✅ | #6–#7 |
+| Persistenz (`saveState`, `loadState`) | ✅ | #8 |
 | Win-Condition (`checkWinCondition`) | ❌ | – |
 | Match-Logik (`findMatches`, `checkMatches`) | ❌ | – |
 | Floating-Removal (`removeFloatingBubbles`) | ❌ | – |
@@ -235,7 +238,7 @@ ok - shootBubble does not push a row synchronously; resolveTurn does
 ok - bomb charge is consumed on arm and blocks a second arm
 ok - resetPowerUps() restores one charge per power-up
 
-7 check(s) passed
+9 check(s) passed
 ```
 
 ### 5.3 Was tun bei rotem CI?

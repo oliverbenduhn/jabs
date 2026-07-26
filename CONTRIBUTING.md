@@ -224,7 +224,7 @@ ok - shootBubble does not push a row synchronously; resolveTurn does
 ok - bomb charge is consumed on arm and blocks a second arm
 ok - resetPowerUps() restores one charge per power-up
 
-7 check(s) passed
+9 check(s) passed
 ```
 
 Detaillierte Strategie: [`docs/TESTING.md`](docs/TESTING.md).

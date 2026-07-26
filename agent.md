@@ -12,7 +12,7 @@
 1. Lies diese Datei vollständig.
 2. Lies [`GLOSSARY.md`](GLOSSARY.md), wenn ein domänenspezifischer Begriff unklar ist.
 3. Konsultiere [`docs/wiki/data-model.md`](docs/wiki/data-model.md) für Fragen zum State.
-4. Führe `npm test` aus, **bevor** du committest. Alle 6 Smoke-Tests müssen grün sein.
+4. Führe `npm test` aus, **bevor** du committest. Alle 8 Smoke-Tests müssen grün sein.
 
 ---
 
@@ -312,7 +312,7 @@ UI-Hooks:
 3. ❌ **Keine globalen Event-Listener außerhalb von `setupEventListeners()`** (Ausnahmen: `window.load`, einmaliger Init-Trigger).
 4. ❌ **Kein `setInterval` oder `setTimeout` für Spiel-Logik** – nur `requestAnimationFrame` für den Game-Loop. Timeouts nur für UI-Debouncing (z. B. Resize-Throttle).
 5. ❌ **Kein direktes Mutieren des Grids außerhalb von `BubbleShooter`-Methoden**.
-6. ❌ **Kein Speichern von Spielständen in `localStorage` ohne explizite Anforderung**.
+6. ❌ **Keinen `localStorage`-Spielstand ohne explizite Anforderung verändern** (Schema: `jabs-save-v1`; siehe `saveState()`/`loadState()`).
 7. ❌ **Keine CSS `!important`** – nutze Spezifität oder Custom Properties.
 8. ❌ **Kein `innerHTML` für dynamische Inhalte** – nutze DOM-Eigenschaften oder `textContent`.
 9. ❌ **Kein `row % 2` für Topologie** – verwende `getRowOffsetFlag(row)`.

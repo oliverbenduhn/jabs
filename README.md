@@ -7,7 +7,7 @@ Ein klassischer Bubble-Shooter als **Single-Page-Webanwendung** – komplett in 
   <img src="https://img.shields.io/badge/JS-ES6%2B-%23f7df1e" alt="JavaScript">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License">
   <img src="https://img.shields.io/badge/dependencies-0-success" alt="Zero Dependencies">
-  <img src="https://img.shields.io/badge/tests-7%20passing-success" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-9%20passing-success" alt="Tests">
   <img src="https://img.shields.io/badge/single--file-1%20htm-informational" alt="Single File">
 </p>
 
@@ -31,7 +31,7 @@ Ein klassischer Bubble-Shooter als **Single-Page-Webanwendung** – komplett in 
 | 💣 **Power-Ups** | Zielhilfe (🎯) und Bombe (💣) mit begrenzten Aufladungen pro Level |
 | 🎨 **Colorblind-Accessibility** | Jede Farbe hat ein eindeutiges Glyph, Matching ist nicht farbabhängig |
 | 📱 **Responsive Design** | Desktop (Maus/Tastatur) und Mobile (Touch/Pointer Capture) |
-| 🧪 **Getestet** | 6 Smoke-Tests + Syntax-Check in CI |
+| 🧪 **Getestet** | 8 Smoke-Tests + Syntax-Check in CI |
 | ♿ **Accessibility** | Pointer Events, Tastatur-Bedienung, ARIA-Labels, Dialog-Semantik |
 | 📏 **Zero Dependencies** | Keine npm-Pakete, kein Build-Tool, kein Framework |
 | 🎯 **Single Source of Truth** | Strikte Architektur (`resolveAim`, `getRowOffsetFlag`, `resolveTurn`) |
@@ -131,7 +131,7 @@ Das Spiel verwendet ein **hexagonales Gitter** mit 15 Spalten und versetzten Rei
 npm test
 ```
 
-Führt einen JavaScript-Syntaxcheck sowie 6 dependency-freie Node-Tests für die Kern-Spiellogik aus:
+Führt einen JavaScript-Syntaxcheck sowie 8 dependency-freie Node-Tests für die Kern-Spiellogik aus:
 
 1. Hex-Nachbarschaft nach `addRow()`-Pushes
 2. `resolveAim()` clampt Abwärtsziele
@@ -139,6 +139,8 @@ Führt einen JavaScript-Syntaxcheck sowie 6 dependency-freie Node-Tests für die
 4. `placeBubble()` platziert lokal, nicht global
 5. `resolveTurn()` ist SSoT für Schuss-Abschluss
 6. Power-Up-Charges werden beim Arming verbraucht
+7. `resetPowerUps()` füllt die Aufladungen wieder auf
+8. Spielstand (Grid, Score, Level und Charges) wird nach Reload wiederhergestellt
 
 Läuft auch in CI (`.github/workflows/test.yml`). Details: [`docs/TESTING.md`](docs/TESTING.md).
 
@@ -175,7 +177,7 @@ Da es sich um eine statische Datei handelt, kann `index.htm` auf **jeden statisc
 - **Nginx / Apache** – Datei ins Document-Root kopieren (Konfiguration in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)).
 - **Custom Domain** – siehe [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) §9.
 
-**Health-Check nach Deploy**: 7 Tests grün (1 Syntax-Check + 6 Smoke-Tests), Browser lädt Canvas, keine 404 in der Console.
+**Health-Check nach Deploy**: 9 Tests grün (1 Syntax-Check + 8 Smoke-Tests), Browser lädt Canvas, keine 404 in der Console.
 
 ---
 
