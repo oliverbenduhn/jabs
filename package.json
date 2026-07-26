@@ -2,8 +2,9 @@
   "name": "jabs",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "Bubble Shooter – hexagonales Grid, Vanilla JS/Canvas, keine Runtime-Abhängigkeiten.",
   "scripts": {
-    "test": "node test/check-syntax.mjs && node test/logic-smoke.mjs"
+    "test": "node test/check-syntax.mjs && node test/hex-grid.spec.mjs && node test/logic-smoke.mjs"
   }
 }

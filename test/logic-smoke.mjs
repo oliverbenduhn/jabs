@@ -1,19 +1,11 @@
 // Dependency-free smoke tests for the pure game-logic invariants called out
-// in master-audit-2026-07-26.md. Runs the inline <script> from index.htm in a
-// sandboxed vm context with minimal DOM stubs (no real layout/rendering).
+// in master-audit-2026-07-26.md. Imports the real BubbleShooter module and
+// runs it against minimal DOM/localStorage stubs installed on globalThis
+// (no real layout/rendering).
 //
 // Run: node test/logic-smoke.mjs
-import fs from 'node:fs';
-import vm from 'node:vm';
 import assert from 'node:assert/strict';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const html = fs.readFileSync(path.join(__dirname, '..', 'index.htm'), 'utf8');
-const scriptMatch = html.match(/<script>([\s\S]*)<\/script>/);
-if (!scriptMatch) throw new Error('Could not find inline <script> in index.htm');
-const scriptSrc = scriptMatch[1];
+import { BubbleShooter } from '../src/bubbleShooter.js';
 
 function makeElement(id) {
   const el = {
@@ -80,37 +72,28 @@ function createGame(sharedLocalStorageStore) {
     '.sidebar': { clientWidth: 200, clientHeight: 800, style: {} },
   };
 
-  const documentStub = {
+  globalThis.document = {
     getElementById,
     querySelector: (sel) => queryables[sel] || null,
     documentElement: { style: { setProperty() {} } },
   };
 
-  const windowStub = {
+  globalThis.window = {
     innerWidth: 1160,
     innerHeight: 800,
     addEventListener: () => {},
+    document: globalThis.document,
   };
 
-  function requestAnimationFrame() {
+  globalThis.requestAnimationFrame = function requestAnimationFrame() {
     // Never auto-fires; tests drive the logic directly instead of the RAF loop.
     return 1;
-  }
-
-  const sandbox = {
-    document: documentStub,
-    window: windowStub,
-    requestAnimationFrame,
-    Math,
-    console,
-    getComputedStyle: () => ({ getPropertyValue: () => '' }),
-    MouseEvent: class {},
-    localStorage: makeLocalStorage(sharedLocalStorageStore),
   };
-  sandbox.window.document = documentStub;
-  vm.createContext(sandbox);
-  vm.runInContext(scriptSrc, sandbox);
-  return vm.runInContext('new BubbleShooter()', sandbox);
+
+  globalThis.getComputedStyle = () => ({ getPropertyValue: () => '' });
+  globalThis.localStorage = makeLocalStorage(sharedLocalStorageStore);
+
+  return new BubbleShooter();
 }
 
 let passed = 0;
@@ -130,17 +113,17 @@ function check(name, fn) {
 check('getNeighbors stays consistent with rowOffsets after two addRow() pushes', (instance) => {
   instance.addRow();
   instance.addRow();
-  for (let row = 0; row < instance.grid.length; row++) {
-    const flag = instance.getRowOffsetFlag(row);
-    const neighbors = instance.getNeighbors(row, 5);
+  for (let row = 0; row < instance.hexGrid.grid.length; row++) {
+    const flag = instance.hexGrid.getRowOffsetFlag(row);
+    const neighbors = instance.hexGrid.getNeighbors(row, 5);
     // Every neighbor's grid-space distance to (row,5) must be close to one
     // bubble diameter (touching circles), proving the delta table matches
     // the actual offset used to place bubbles.
-    const origin = instance.getBubblePosition(row, 5);
+    const origin = instance.hexGrid.getBubblePosition(row, 5);
     neighbors.forEach(({ r, c }) => {
-      const pos = instance.getBubblePosition(r, c);
+      const pos = instance.hexGrid.getBubblePosition(r, c);
       const dist = Math.hypot(pos.x - origin.x, pos.y - origin.y);
-      const expected = instance.bubbleRadius * 2;
+      const expected = instance.hexGrid.bubbleRadius * 2;
       assert.ok(Math.abs(dist - expected) < 0.01, `row=${row} flag=${flag} neighbor (${r},${c}) dist=${dist} expected=${expected}`);
     });
   }
@@ -165,25 +148,25 @@ check('shootBubble never launches a bubble downward', (instance) => {
 check('placeBubble lands on a free neighbor of the collided bubble', (instance) => {
   const targetRow = instance.initialRows - 1, targetCol = 5; // bottom filled row: has free cells below it
   const collision = { row: targetRow, col: targetCol };
-  const localCandidatesBefore = instance.getLocalCandidates(targetRow, targetCol);
+  const localCandidatesBefore = instance.hexGrid.getLocalCandidates(targetRow, targetCol);
   assert.ok(localCandidatesBefore.length > 0, 'test setup needs at least one free local slot');
-  const target = instance.getBubblePosition(targetRow, targetCol);
-  const bubble = { x: target.x, y: target.y, color: '#000', radius: instance.bubbleRadius, powerUp: null };
+  const target = instance.hexGrid.getBubblePosition(targetRow, targetCol);
+  const bubble = { x: target.x, y: target.y, color: '#000', radius: instance.hexGrid.bubbleRadius, powerUp: null };
   instance.shotsFired = 1; // avoid resolveTurn's row-push branch (0 % shotsPerRow === 0) firing here
   instance.placeBubble(bubble, collision);
   const landedLocally = localCandidatesBefore.some(
-    (c) => instance.grid[c.row] && instance.grid[c.row][c.col] && instance.grid[c.row][c.col].color === '#000'
+    (c) => instance.hexGrid.grid[c.row] && instance.hexGrid.grid[c.row][c.col] && instance.hexGrid.grid[c.row][c.col].color === '#000'
   );
   assert.ok(landedLocally, "bubble should land on one of the collided cell's free neighbors, not a distant cell");
 });
 
 // 4. Turn resolution: addRow() must not fire until after placement resolves.
 check('shootBubble does not push a row synchronously; resolveTurn does', (instance) => {
-  const freshRows = instance.grid.length;
+  const freshRows = instance.hexGrid.grid.length;
   instance.shotsFired = instance.shotsPerRow - 1; // next shot should trigger a push
   instance.activeBubble = null;
   instance.shootBubble(instance.shooter.x, instance.shooter.y - 500);
-  assert.equal(instance.grid.length, freshRows, 'addRow must not run inside shootBubble');
+  assert.equal(instance.hexGrid.grid.length, freshRows, 'addRow must not run inside shootBubble');
 });
 
 // 5. Power-up charges: arming twice without a level reset must be blocked.
@@ -218,7 +201,7 @@ check('resetPowerUps() restores one charge per power-up', (instance) => {
     before.shotsFired = 2;
     before.updateUI(); // this is what persists state during real play
 
-    const gridSnapshotBefore = before.grid.map((row) => (row ? row.map((b) => (b ? b.color : null)) : null));
+    const gridSnapshotBefore = before.hexGrid.grid.map((row) => (row ? row.map((b) => (b ? b.color : null)) : null));
 
     // Simulate F5: a brand-new instance, same localStorage store.
     const after = createGame(store);
@@ -226,7 +209,7 @@ check('resetPowerUps() restores one charge per power-up', (instance) => {
     assert.equal(after.score, 470, 'score should survive a reload');
     assert.equal(after.level, 3, 'level should survive a reload');
     assert.equal(after.shotsFired, 2, 'shotsFired should survive a reload');
-    const gridSnapshotAfter = after.grid.map((row) => (row ? row.map((b) => (b ? b.color : null)) : null));
+    const gridSnapshotAfter = after.hexGrid.grid.map((row) => (row ? row.map((b) => (b ? b.color : null)) : null));
     // JSON comparison sidesteps a node:assert quirk where sparse arrays with
     // identical contents are reported as "not reference-equal" by deepEqual.
     assert.equal(
