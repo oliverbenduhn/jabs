@@ -1,0 +1,81 @@
+# jabs – Cursor Rules
+# Single-file vanilla-JS bubble shooter. Zero dependencies.
+# See GLOSSARY.md for terminology, agent.md for prose rules.
+
+# ─── Architecture ─────────────────────────────────────────────────────────────
+- Single BubbleShooter class. All logic lives as instance methods.
+- Zero dependencies. No npm, no framework, no CDN, no build tool.
+- All app code lives in index.htm. New files allowed only for docs/, test/, .github/.
+
+# ─── SSoT (Single Source of Truth) ─────────────────────────────────────────────
+- Hex topology: getRowOffsetFlag(row). NEVER row % 2.
+- Aim direction: resolveAim(targetX, targetY). NEVER Math.atan2 elsewhere for shots.
+- Turn resolution: resolveTurn() at end of placeBubble(). NEVER in shootBubble().
+- Grid mutation: only inside BubbleShooter methods. NEVER external.
+- DOM updates: updateUI() only. NEVER direct textContent in gameplay methods.
+
+# ─── State ─────────────────────────────────────────────────────────────────────
+- All state as instance properties on BubbleShooter (this.*).
+- No DOM-as-state, no window.* properties, no localStorage.
+- delete grid[r][c] to remove. NEVER null, '', 0, false.
+- this.rowOffsets[row] caches row offsets (0 or 1). Use getRowOffsetFlag(row).
+
+# ─── Inputs ────────────────────────────────────────────────────────────────────
+- Pointer Events only: pointerdown, pointermove, pointerup, pointercancel.
+- Pointer Capture for drag-to-aim on touch.
+- Keyboard: ArrowLeft/Right for aim, Space/Enter to shoot, Escape to close overlay.
+- All aim paths funnel through resolveAim().
+
+# ─── Turn Sequence (mandatory) ─────────────────────────────────────────────────
+shootBubble: create activeBubble, rotate queue, shotsFired++. NOTHING else.
+placeBubble: place or explode, then checkMatches → removeFloating → resolveTurn.
+resolveTurn: checkWin → nextLevel? else addRow? else checkGameOver.
+
+# ─── Power-Ups ─────────────────────────────────────────────────────────────────
+- Toggle via button click.
+- Charge consumed on ARM, not on shoot.
+- aimAssistShots-- inside shootBubble() after firing.
+- bombArmed attached to activeBubble.powerUp on fire.
+- resetPowerUps() at game start, level up, restart, game over.
+- Button.disabled + aria-label reflect remaining charges.
+
+# ─── Rendering ─────────────────────────────────────────────────────────────────
+- Canvas 2D API only. No Pixi/Three/Phaser.
+- SVG <line> for trajectory, NOT canvas.
+- gameLoop order: clearRect → updateActiveBubble → grid draw → active bubble draw → raf.
+- deltaTime from rAF timestamp, capped at 100ms.
+- Substep collision: steps = min(50, max(1, ceil(stepDistance / (radius*0.5)))).
+- drawBubble() never mutates state. Zeichenbefehle only.
+
+# ─── Conventions ───────────────────────────────────────────────────────────────
+- ES6+ class syntax. const > let > var (var forbidden).
+- camelCase vars/methods, PascalCase classes.
+- === / !==. NEVER == / !=.
+- Early returns. No nested if-else.
+- Template literals. NEVER + string concat.
+- Optional chaining where useful.
+- JSDoc on public methods: @param + @returns.
+
+# ─── Magic Numbers ─────────────────────────────────────────────────────────────
+- Shots per row (5) → this.shotsPerRow.
+- Columns (15) → this.fixedColumns.
+- Initial rows (8) → this.initialRows.
+- Free rows (10) → this.bottomFreeRows.
+- Bubble speed (480) → constant or comment.
+- Power-up charges (1) → this.maxPowerUpCharges.
+- Angle limits → this.baseAngleLimit, this.aimAngleLimit.
+
+# ─── Forbidden ─────────────────────────────────────────────────────────────────
+- ❌ any new dependency in package.json (only devDependencies for tests).
+- ❌ global event listeners outside setupEventListeners().
+- ❌ setInterval/setTimeout for game logic (only UI debouncing).
+- ❌ CSS !important.
+- ❌ innerHTML for dynamic content.
+- ❌ new files for game code.
+- ❌ row % 2 for topology or positioning.
+- ❌ separate touch/mouse event paths.
+
+# ─── Pre-commit checklist ──────────────────────────────────────────────────────
+- npm test passes (syntax + 6 smoke tests).
+- No conflict markers in diff.
+- Doku updates reference GLOSSARY.md terms consistently.
