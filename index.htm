@@ -441,6 +441,9 @@
 
     <script>
         class BubbleShooter {
+            /**
+             * Erstellt das Spiel, bindet DOM-Elemente und startet Initialisierung sowie Game-Loop.
+             */
             constructor() {
                 this.canvas = document.getElementById('gameCanvas');
                 this.ctx = this.canvas.getContext('2d');
@@ -495,6 +498,14 @@
                 this.activeDialogTrigger = null;
                 this.shotsFired = 0;
                 this.shotsPerRow = 5;
+                this.bubbleSpeedPxPerSecond = 480;
+                this.normalTrajectoryLength = 200;
+                this.aimAssistTrajectoryLength = 280;
+                this.trajectoryVerticalEpsilon = 0.0001;
+                this.collisionSubstepRadiusFactor = 0.5;
+                this.maxCollisionSubsteps = 50;
+                this.maxFrameDeltaMs = 100;
+                this.shooterBottomOffset = 100;
                 this.activeBubble = null;
                 this.baseAngleLimit = Math.PI / 2.5;
                 this.aimAngleLimit = Math.PI / 1.8;
@@ -518,7 +529,7 @@
                 
                 this.shooter = {
                     x: this.canvas.width / 2,
-                    y: this.canvas.height - 100,
+                    y: this.canvas.height - this.shooterBottomOffset,
                     angle: -Math.PI / 2
                 };
 
@@ -583,11 +594,14 @@
 
                 if (this.shooter) {
                     this.shooter.x = this.gridLeftEdge + this.gridWidth / 2;
-                    this.shooter.y = this.canvas.height - 100;
+                    this.shooter.y = this.canvas.height - this.shooterBottomOffset;
                     this.shooter.x = this.clampAimX(this.shooter.x);
                 }
             }
             
+            /**
+             * Initialisiert einen neuen oder gespeicherten Spielzustand und aktualisiert die UI.
+             */
             initializeGame() {
                 this.resetPowerUps();
                 this.activeBubble = null;
@@ -680,6 +694,9 @@
                 }
             }
             
+            /**
+             * Erstellt das anfängliche, vollständig belegte Hex-Grid.
+             */
             createInitialGrid() {
                 this.updateGridMetrics(this.canvas.width, this.canvas.height);
                 const rows = this.initialRows;
@@ -709,7 +726,7 @@
                 const radiusByWidth = effectiveWidth / widthUnits;
 
                 const canvasHeight = (availableHeight && availableHeight > 0) ? availableHeight : this.canvas.height;
-                const shooterY = canvasHeight - 100;
+                const shooterY = canvasHeight - this.shooterBottomOffset;
                 const rows = Math.max(this.grid.length || 0, this.initialRows);
                 const freeRows = this.bottomFreeRows;
                 const denom = ((rows - 1 + freeRows) * Math.sqrt(3)) + 3;
@@ -765,6 +782,12 @@
                 return flag * this.bubbleRadius;
             }
 
+            /**
+             * Liefert den gespeicherten Versatz einer Grid-Zeile und ergänzt ihn bei Bedarf.
+             *
+             * @param {number} row Grid-Zeile
+             * @returns {number} 0 für linksbündig, 1 für um einen Radius versetzt
+             */
             getRowOffsetFlag(row) {
                 if (row < 0) return 0;
                 if (this.rowOffsets[row] !== undefined) {
@@ -780,6 +803,12 @@
                 return flag;
             }
 
+            /**
+             * Begrenzt eine Ziel-X-Koordinate auf den horizontalen Spielbereich.
+             *
+             * @param {number} x X-Koordinate im Canvas-Raum
+             * @returns {number} Geklammerte X-Koordinate
+             */
             clampAimX(x) {
                 const left = this.gridLeftEdge + this.bubbleRadius;
                 const right = this.gridRightEdge - this.bubbleRadius;
@@ -791,6 +820,13 @@
                 return Math.max(left, Math.min(right, x));
             }
 
+            /**
+             * Berechnet die Canvas-Position einer Grid-Zelle.
+             *
+             * @param {number} row Grid-Zeile
+             * @param {number} col Grid-Spalte
+             * @returns {{x: number, y: number}} Mittelpunkt der Zelle im Canvas-Raum
+             */
             getBubblePosition(row, col) {
                 const offsetX = this.getRowOffset(row);
                 const x = this.gridLeftOffset + col * (this.bubbleRadius * 2) + this.bubbleRadius + offsetX;
@@ -798,6 +834,14 @@
                 return { x, y };
             }
 
+            /**
+             * Erzeugt eine Grid-Bubble an einer berechneten Hex-Position.
+             *
+             * @param {number} row Grid-Zeile
+             * @param {number} col Grid-Spalte
+             * @param {string} color HEX-Farbe der Bubble
+             * @returns {{color: string, x: number, y: number, radius: number}} Neue Bubble
+             */
             createBubble(row, col, color) {
                 const { x, y } = this.getBubblePosition(row, col);
                 return {
@@ -812,6 +856,7 @@
                 return this.colors[Math.floor(Math.random() * this.colors.length)];
             }
             
+            /** Erzeugt die Queue der nächsten fünf Bubble-Farben. */
             generateNextBubbles() {
                 this.nextBubbles = [];
                 for (let i = 0; i < 5; i++) {
@@ -996,9 +1041,14 @@
                 this.isAiming = false;
             }
 
-            // Single source of truth for aiming: clamps the angle around the
-            // upward axis (-90°) so the preview line and the actual shot
-            // always agree on the same direction vector.
+            /**
+             * Berechnet die begrenzte Schussrichtung aus einer Zielkoordinate.
+             * Diese Single Source of Truth hält Vorschau und tatsächlichen Schuss synchron.
+             *
+             * @param {number} targetX Ziel-X im Canvas-Raum
+             * @param {number} targetY Ziel-Y im Canvas-Raum
+             * @returns {{angle: number, dirX: number, dirY: number}} Winkel und Einheitsvektor
+             */
             resolveAim(targetX, targetY) {
                 const dx = targetX - this.shooter.x;
                 const dy = targetY - this.shooter.y;
@@ -1014,12 +1064,19 @@
                 return { angle, dirX: Math.cos(angle), dirY: Math.sin(angle) };
             }
 
+            /**
+             * Zeichnet die begrenzte Trajektorie für die aktuelle Aim-Richtung.
+             *
+             * @param {{angle: number, dirX: number, dirY: number}} aim Ergebnis von resolveAim()
+             */
             updateTrajectory(aim) {
                 const line = this.trajectoryLine;
                 const startX = this.shooter.x;
                 const startY = this.shooter.y;
 
-                const maxDistance = this.aimAssistShots > 0 ? 280 : 200;
+                const maxDistance = this.aimAssistShots > 0
+                    ? this.aimAssistTrajectoryLength
+                    : this.normalTrajectoryLength;
                 const endX = startX + aim.dirX * maxDistance;
                 const endY = startY + aim.dirY * maxDistance;
 
@@ -1029,7 +1086,7 @@
                 const rightBound = this.gridRightEdge - this.bubbleRadius;
                 const adjustEnd = (boundX) => {
                     const denom = endX - startX;
-                    if (Math.abs(denom) < 0.0001) {
+                    if (Math.abs(denom) < this.trajectoryVerticalEpsilon) {
                         finalEndX = boundX;
                         finalEndY = endY;
                     } else {
@@ -1051,6 +1108,12 @@
                 line.style.display = 'block';
             }
             
+            /**
+             * Erstellt und startet eine Bubble für die angegebene Zielkoordinate.
+             *
+             * @param {number} targetX Ziel-X im Canvas-Raum
+             * @param {number} targetY Ziel-Y im Canvas-Raum
+             */
             shootBubble(targetX, targetY) {
                 if (this.activeBubble) {
                     return;
@@ -1060,15 +1123,13 @@
                 const aim = this.resolveAim(aimX, targetY);
                 this.shooter.angle = aim.angle;
 
-                // 480px/s ≈ the old fixed 8px-per-frame step at 60fps, now
-                // resolved with real elapsed time so speed no longer depends
-                // on the display's refresh rate.
+                // Zeitbasierte Geschwindigkeit, unabhängig von der Bildrate.
                 const bubble = {
                     x: this.shooter.x,
                     y: this.shooter.y,
                     dirX: aim.dirX,
                     dirY: aim.dirY,
-                    speed: 480,
+                    speed: this.bubbleSpeedPxPerSecond,
                     color: this.currentBubble,
                     radius: this.bubbleRadius,
                     powerUp: null
@@ -1097,6 +1158,11 @@
                 this.activeBubble = bubble;
             }
 
+            /**
+             * Bewegt die aktive Bubble in kollisionssicheren Teilschritten.
+             *
+             * @param {number} deltaMs Vergangene Zeit seit dem letzten Frame in Millisekunden
+             */
             updateActiveBubble(deltaMs) {
                 if (!this.activeBubble) return;
 
@@ -1105,8 +1171,14 @@
                 const stepDistance = bubble.speed * dt;
                 // Substep the movement so fast frames (or small bubbles) can't
                 // tunnel through a grid bubble between two collision checks.
-                const maxStepSize = Math.max(bubble.radius * 0.5, 1);
-                const steps = Math.min(50, Math.max(1, Math.ceil(stepDistance / maxStepSize)));
+                const maxStepSize = Math.max(
+                    bubble.radius * this.collisionSubstepRadiusFactor,
+                    1
+                );
+                const steps = Math.min(
+                    this.maxCollisionSubsteps,
+                    Math.max(1, Math.ceil(stepDistance / maxStepSize))
+                );
                 const singleStepDistance = stepDistance / steps;
 
                 const leftEdge = this.gridLeftEdge;
@@ -1135,6 +1207,7 @@
                 }
             }
 
+            /** Aktiviert oder deaktiviert die Zielhilfe für den nächsten Schuss. */
             activateAimPowerUp() {
                 if (!this.gameRunning) return;
                 if (this.aimAssistShots > 0) {
@@ -1151,6 +1224,7 @@
                 this.updatePowerUpAvailability();
             }
 
+            /** Aktiviert oder deaktiviert die Bombe für den nächsten Schuss. */
             activateBombPowerUp() {
                 if (!this.gameRunning) return;
                 if (this.bombArmed) {
@@ -1187,6 +1261,7 @@
                 }
             }
 
+            /** Setzt Aufladungen, aktivierte Zustände und Winkelbegrenzung zurück. */
             resetPowerUps() {
                 this.aimAssistShots = 0;
                 this.bombArmed = false;
@@ -1198,6 +1273,13 @@
                 this.setPowerUpState(this.bombBtn, false);
             }
 
+            /**
+             * Entfernt die getroffene Bubble und ihre direkten Hex-Nachbarn.
+             *
+             * @param {number} row Mittelpunkt-Zeile
+             * @param {number} col Mittelpunkt-Spalte
+             * @returns {number} Anzahl entfernter Bubbles
+             */
             removeBombCluster(row, col) {
                 let removed = 0;
                 const toRemove = new Set([`${row}-${col}`]);
@@ -1233,6 +1315,7 @@
                 this.closeDialog(this.overlay);
             }
 
+            /** Beendet die laufende Partie, speichert den Highscore und zeigt das Overlay. */
             triggerGameOver() {
                 if (!this.gameRunning) return;
                 this.gameRunning = false;
@@ -1246,6 +1329,7 @@
                 this.showOverlay('Game Over', `Punkte: ${this.score}`);
             }
 
+            /** Setzt die Partie auf Level 1 zurück und startet den Game-Loop erneut. */
             restartGame() {
                 this.hideOverlay();
                 if (this.score > this.highscore) {
@@ -1268,6 +1352,12 @@
                 this.startGameLoop();
             }
             
+            /**
+             * Sucht die erste Grid-Bubble, die sich mit einer fliegenden Bubble überschneidet.
+             *
+             * @param {{x: number, y: number, radius: number}} bubble Fliegende Bubble
+             * @returns {{row: number, col: number}|null} Getroffene Grid-Zelle oder null
+             */
             checkCollision(bubble) {
                 for (let row = 0; row < this.grid.length; row++) {
                     const rowArray = this.grid[row];
@@ -1289,6 +1379,12 @@
                 return null;
             }
             
+            /**
+             * Platziert eine Bubble oder löst deren Bombenwirkung aus und beendet anschließend den Turn.
+             *
+             * @param {{x: number, y: number, color: string, powerUp: string|null}} bubble Zu platzierende Bubble
+             * @param {{row: number, col: number}|null} collision Getroffene Zelle oder null bei Deckenkontakt
+             */
             placeBubble(bubble, collision) {
                 const { row, col } = this.findBestPosition(bubble.x, bubble.y, collision);
 
@@ -1320,10 +1416,9 @@
                 this.resolveTurn();
             }
 
-            // Completes a turn only after the shot's own effects (placement,
-            // matches, floating bubbles) are fully resolved, so a row-push
-            // and its game-over check never race a shot that could still
-            // save the board.
+            /**
+             * Schließt einen Turn nach allen Schusseffekten ab: Win, Row Push oder Game Over.
+             */
             resolveTurn() {
                 if (this.checkWinCondition()) {
                     this.nextLevel();
@@ -1338,6 +1433,13 @@
 
             // Coordinates of empty cells adjacent to (row, col), following the
             // same hex-neighbor topology as getNeighbors().
+            /**
+             * Liefert freie, direkt benachbarte Kandidaten für eine Platzierung.
+             *
+             * @param {number} row Referenz-Zeile
+             * @param {number} col Referenz-Spalte
+             * @returns {Array<{row: number, col: number}>} Freie Nachbarzellen
+             */
             getLocalCandidates(row, col) {
                 const flag = this.getRowOffsetFlag(row);
                 const deltas = flag === 0
@@ -1355,6 +1457,14 @@
                 return candidates;
             }
 
+            /**
+             * Wählt die freie Grid-Zelle, die einer Landekoordinate am nächsten liegt.
+             *
+             * @param {number} x Lande-X im Canvas-Raum
+             * @param {number} y Lande-Y im Canvas-Raum
+             * @param {{row: number, col: number}|null} collision Getroffene Zelle oder null
+             * @returns {{row: number, col: number}} Beste freie Position
+             */
             findBestPosition(x, y, collision) {
                 let candidates;
                 if (collision) {
@@ -1397,6 +1507,12 @@
                 return { row: bestRow, col: bestCol };
             }
             
+            /**
+             * Entfernt einen verbundenen Match aus mindestens drei gleichfarbigen Bubbles.
+             *
+             * @param {number} row Start-Zeile
+             * @param {number} col Start-Spalte
+             */
             checkMatches(row, col) {
                 const color = this.grid[row][col].color;
                 const matches = this.findMatches(row, col, color);
@@ -1415,6 +1531,15 @@
                 }
             }
             
+            /**
+             * Findet alle gleichfarbigen, per Hex-Nachbarschaft verbundenen Bubbles.
+             *
+             * @param {number} row Start-Zeile
+             * @param {number} col Start-Spalte
+             * @param {string} color Zu suchende HEX-Farbe
+             * @param {Set<string>} [visited=new Set()] Bereits besuchte Zellen
+             * @returns {Array<{r: number, c: number}>} Gefundene Grid-Positionen
+             */
             findMatches(row, col, color, visited = new Set()) {
                 const key = `${row}-${col}`;
                 const rowArray = this.grid[row];
@@ -1433,6 +1558,13 @@
                 return matches;
             }
             
+            /**
+             * Liefert vorhandene Bubble-Nachbarn einer Zelle entsprechend der Hex-Topologie.
+             *
+             * @param {number} row Ausgangs-Zeile
+             * @param {number} col Ausgangs-Spalte
+             * @returns {Array<{r: number, c: number}>} Belegte Nachbarpositionen
+             */
             getNeighbors(row, col) {
                 const neighbors = [];
                 const deltas = this.getRowOffsetFlag(row) === 0
@@ -1453,6 +1585,7 @@
                 return neighbors;
             }
             
+            /** Entfernt alle Bubbles ohne Verbindung zur obersten Reihe und vergibt Punkte. */
             removeFloatingBubbles() {
                 const connected = new Set();
                 
@@ -1492,6 +1625,11 @@
                 });
             }
             
+            /**
+             * Prüft, ob das Grid keine Bubble mehr enthält.
+             *
+             * @returns {boolean} true bei leerem Grid
+             */
             checkWinCondition() {
                 for (let row = 0; row < this.grid.length; row++) {
                     for (let col = 0; col < this.grid[row].length; col++) {
@@ -1501,6 +1639,7 @@
                 return true;
             }
             
+            /** Startet das nächste Level mit neuem Grid, neuer Queue und aufgefüllten Power-Ups. */
             nextLevel() {
                 this.level++;
                 this.shotsFired = 0;
@@ -1511,6 +1650,7 @@
                 this.updateUI();
             }
 
+            /** Fügt am oberen Rand eine neue Bubble-Reihe ein und prüft auf Game Over. */
             addRow() {
                 const cols = this.columnCount;
                 const firstFlag = this.rowOffsets[0] ?? 0;
@@ -1534,6 +1674,7 @@
                 }
             }
 
+            /** Prüft, ob eine Bubble die Shooter-Linie erreicht hat. */
             checkGameOver() {
                 const limit = this.shooter.y - this.bubbleRadius * 2;
                 for (let row = 0; row < this.grid.length; row++) {
@@ -1553,6 +1694,7 @@
                 this.updateUI();
             }
             
+            /** Aktualisiert alle DOM-Anzeigen aus dem aktuellen Spielzustand. */
             updateUI() {
                 document.getElementById('score').textContent = this.score;
                 document.getElementById('level').textContent = this.level;
@@ -1637,6 +1779,11 @@
                 return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
             }
             
+            /**
+             * Rendert einen Frame, aktualisiert die Physik und plant den nächsten Frame.
+             *
+             * @param {number} timestamp requestAnimationFrame-Zeitstempel
+             */
             gameLoop(timestamp) {
                 // Stop scheduling frames once the game isn't actively running —
                 // restartGame()/closeMenu() call startGameLoop() to resume.
@@ -1647,7 +1794,7 @@
                 }
 
                 const lastTime = this.lastFrameTime ?? timestamp;
-                const deltaMs = Math.min(timestamp - lastTime, 100);
+                const deltaMs = Math.min(timestamp - lastTime, this.maxFrameDeltaMs);
                 this.lastFrameTime = timestamp;
 
                 this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -1675,6 +1822,7 @@
                 this.loopHandle = requestAnimationFrame((t) => this.gameLoop(t));
             }
 
+            /** Startet den requestAnimationFrame-Loop, falls er nicht bereits läuft. */
             startGameLoop() {
                 if (this.loopHandle) return;
                 this.lastFrameTime = null;
