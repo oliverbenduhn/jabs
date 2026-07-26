@@ -2,11 +2,465 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="0; url=index.htm">
-    <link rel="canonical" href="index.htm">
-    <title>Bubble Shooter</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>jabs – just another bubble shooter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --game-width: 960px;
+            --sidebar-width: 200px;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #9b59b6, #8e44ad);
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .game-container {
+            display: flex;
+            width: min(calc(var(--game-width) + var(--sidebar-width)), 100vw);
+            height: 100vh;
+        }
+
+        .game-area {
+            flex: none;
+            width: var(--game-width);
+            position: relative;
+            background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+            border-radius: 0 20px 20px 0;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            flex: none;
+            width: var(--sidebar-width);
+            background: linear-gradient(135deg, #9b59b6, #8e44ad);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            color: white;
+        }
+
+        .title {
+            font-size: 32px;
+            font-weight: bold;
+            text-align: center;
+            color: #ffd700;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            margin-bottom: 4px;
+        }
+
+        .subtitle {
+            font-size: 12px;
+            font-weight: normal;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.75);
+            margin-bottom: 20px;
+        }
+
+        .score-item {
+            background: rgba(255,255,255,0.2);
+            border-radius: 15px;
+            padding: 15px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .score-icon {
+            width: 40px;
+            height: 40px;
+            margin: 0 auto 10px;
+            background: #ffd700;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .score-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #ffd700;
+        }
+
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        canvas {
+            display: block;
+            background: transparent;
+            touch-action: none;
+        }
+
+        .shooter-area {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .bubble-queue {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 5px;
+        }
+
+        .queue-bubble {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 3px solid rgba(255,255,255,0.3);
+            background: #ccc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(0, 0, 0, 0.55);
+            font-size: 16px;
+        }
+
+        .shooter {
+            position: relative;
+            width: 80px;
+            height: 80px;
+        }
+
+        .shooter-base {
+            width: 80px;
+            height: 80px;
+            background: radial-gradient(circle, #e0e0e0, #bdbdbd);
+            border-radius: 50%;
+            border: 4px solid #9e9e9e;
+            position: absolute;
+        }
+
+        .shooter-bubble {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(0, 0, 0, 0.55);
+            font-size: 20px;
+        }
+
+        .shooter-bubble--busy {
+            opacity: 0.5;
+        }
+
+        .power-ups {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .power-up-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 3px solid white;
+            background: #ff6b6b;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            transition: transform 0.2s;
+        }
+
+        .power-up-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .power-up-btn.active {
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.7);
+            border-color: #ffd700;
+        }
+
+        .power-up-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .power-up-btn:disabled:hover {
+            transform: none;
+        }
+
+        .help-menu {
+            display: flex;
+            gap: 10px;
+            margin-top: auto;
+        }
+
+        .help-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.2);
+            border: 2px solid white;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .help-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .trajectory-line {
+            stroke: #006978;
+            stroke-width: 3;
+            stroke-dasharray: 5,5;
+            opacity: 1;
+        }
+
+        .game-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .game-overlay__content {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 30px 40px;
+            border-radius: 20px;
+            text-align: center;
+            color: #4a148c;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .game-overlay.hidden {
+            display: none;
+        }
+
+        .game-overlay__content h2 {
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+
+        .game-overlay__content p {
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+
+        .overlay-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            background: linear-gradient(135deg, #9b59b6, #8e44ad);
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .overlay-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .overlay-btn + .overlay-btn {
+            margin-left: 10px;
+        }
+
+        .score-label {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-bottom: 2px;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        @media (max-width: 768px) {
+            .game-container {
+                flex-direction: column;
+                width: 100vw;
+                height: 100dvh;
+            }
+
+            .sidebar {
+                width: 100%;
+                flex: none;
+                height: 120px;
+                flex-direction: row;
+                justify-content: space-around;
+                padding: 10px;
+            }
+
+            .title {
+                font-size: 24px;
+                margin: 0;
+            }
+
+            .subtitle {
+                font-size: 10px;
+                margin: 0;
+            }
+
+            .score-item {
+                padding: 10px;
+                min-width: 80px;
+            }
+
+            .game-area {
+                width: 100%;
+                flex: 1 1 auto;
+                min-height: 0;
+                border-radius: 0;
+            }
+
+            .shooter-area {
+                bottom: 12px;
+            }
+
+            .power-ups {
+                top: 10px;
+                left: 10px;
+            }
+
+            .power-up-btn {
+                width: 44px;
+                height: 44px;
+                font-size: 18px;
+            }
+        }
+    </style>
 </head>
 <body>
-    <p>Weiterleitung zu <a href="index.htm">index.htm</a> …</p>
+    <div class="game-container">
+        <div class="game-area">
+            <div class="canvas-container">
+                <canvas id="gameCanvas" aria-label="Bubble-Shooter-Spielfeld">
+                    Dein Browser unterstützt das Canvas-Element nicht, das für dieses Spiel benötigt wird.
+                </canvas>
+                <svg id="trajectory" style="position: absolute; top: 0; left: 0; pointer-events: none;">
+                    <line id="trajectoryLine" class="trajectory-line" style="display: none;"/>
+                </svg>
+                <div class="shooter-area">
+                    <div class="shooter" id="shooter">
+                        <div class="shooter-base"></div>
+                        <div class="shooter-bubble" id="currentBubble"></div>
+                    </div>
+                </div>
+                <div class="bubble-queue">
+                    <div class="queue-bubble" id="queue1"></div>
+                    <div class="queue-bubble" id="queue2"></div>
+                    <div class="queue-bubble" id="queue3"></div>
+                    <div class="queue-bubble" id="queue4"></div>
+                    <div class="queue-bubble" id="queue5"></div>
+                </div>
+                <div class="power-ups">
+                    <button type="button" class="power-up-btn" id="aimBtn" aria-label="Zielhilfe" aria-pressed="false">🎯</button>
+                    <button type="button" class="power-up-btn" id="bombBtn" aria-label="Bombe" aria-pressed="false">💣</button>
+                </div>
+            </div>
+            <div id="gameOverlay" class="game-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="overlayTitle" aria-describedby="overlayMessage">
+                <div class="game-overlay__content">
+                    <h2 id="overlayTitle">Game Over</h2>
+                    <p id="overlayMessage"></p>
+                    <button id="restartBtn" class="overlay-btn">Neustart</button>
+                </div>
+            </div>
+            <div id="helpOverlay" class="game-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+                <div class="game-overlay__content">
+                    <h2 id="helpTitle">Spielanleitung</h2>
+                    <p>Ziehe mit Maus oder Finger, um zu zielen, und lass los, um zu schießen.</p>
+                    <p>Mit den Pfeiltasten zielen und mit Leertaste oder Enter schießen.</p>
+                    <p>Verbinde 3 oder mehr gleichfarbige Bubbles, um sie zu entfernen.</p>
+                    <p>🎯 Zielhilfe erweitert den Schusswinkel für den nächsten Schuss. 💣 Bombe entfernt die getroffene Bubble und ihre Nachbarn.</p>
+                    <button type="button" id="helpCloseBtn" class="overlay-btn">Schließen</button>
+                </div>
+            </div>
+            <div id="menuOverlay" class="game-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+                <div class="game-overlay__content">
+                    <h2 id="menuTitle">Pause</h2>
+                    <p>Punkte: <span id="menuScore">0</span></p>
+                    <button type="button" id="resumeBtn" class="overlay-btn">Fortsetzen</button>
+                    <button type="button" id="menuRestartBtn" class="overlay-btn">Neustart</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="title">jabs</div>
+            <div class="subtitle">just another bubble shooter</div>
+
+            <div class="score-item">
+                <div class="score-icon" aria-hidden="true">⭐</div>
+                <div class="score-label">Level</div>
+                <div class="score-value" id="level">1</div>
+            </div>
+
+            <div class="score-item">
+                <div class="score-icon" aria-hidden="true">🏆</div>
+                <div class="score-label">Punkte</div>
+                <div class="score-value" id="score">0</div>
+            </div>
+
+            <div class="score-item">
+                <div class="score-icon" aria-hidden="true">🥇</div>
+                <div class="score-label">Highscore</div>
+                <div class="score-value" id="highscore">0</div>
+            </div>
+
+            <div class="help-menu">
+                <button type="button" class="help-btn" id="helpBtn" aria-label="Hilfe anzeigen" aria-haspopup="dialog">?</button>
+                <button type="button" class="help-btn" id="menuBtn" aria-label="Menü öffnen" aria-haspopup="dialog">☰</button>
+            </div>
+        </div>
+        <div id="srStatus" class="sr-only" role="status" aria-live="polite"></div>
+    </div>
+
+    <script type="module">
+        import { BubbleShooter } from './src/bubbleShooter.js';
+
+        // Initialize game when page loads
+        window.addEventListener('load', () => {
+            new BubbleShooter();
+        });
+    </script>
 </body>
 </html>

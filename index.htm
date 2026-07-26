@@ -111,10 +111,13 @@
             transform: translateX(-50%);
             display: flex;
             align-items: center;
-            gap: 20px;
+            justify-content: center;
         }
 
         .bubble-queue {
+            position: absolute;
+            top: 10px;
+            right: 10px;
             display: flex;
             gap: 5px;
         }
@@ -167,6 +170,9 @@
         }
 
         .power-ups {
+            position: absolute;
+            top: 10px;
+            left: 10px;
             display: flex;
             gap: 10px;
         }
@@ -347,9 +353,18 @@
             }
 
             .shooter-area {
-                width: 100%;
-                justify-content: center;
-                flex-wrap: wrap;
+                bottom: 12px;
+            }
+
+            .power-ups {
+                top: 10px;
+                left: 10px;
+            }
+
+            .power-up-btn {
+                width: 44px;
+                height: 44px;
+                font-size: 18px;
             }
         }
     </style>
@@ -365,21 +380,21 @@
                     <line id="trajectoryLine" class="trajectory-line" style="display: none;"/>
                 </svg>
                 <div class="shooter-area">
-                    <div class="bubble-queue">
-                        <div class="queue-bubble" id="queue1"></div>
-                        <div class="queue-bubble" id="queue2"></div>
-                        <div class="queue-bubble" id="queue3"></div>
-                        <div class="queue-bubble" id="queue4"></div>
-                        <div class="queue-bubble" id="queue5"></div>
-                    </div>
                     <div class="shooter" id="shooter">
                         <div class="shooter-base"></div>
                         <div class="shooter-bubble" id="currentBubble"></div>
                     </div>
-                    <div class="power-ups">
-                        <button type="button" class="power-up-btn" id="aimBtn" aria-label="Zielhilfe" aria-pressed="false">🎯</button>
-                        <button type="button" class="power-up-btn" id="bombBtn" aria-label="Bombe" aria-pressed="false">💣</button>
-                    </div>
+                </div>
+                <div class="bubble-queue">
+                    <div class="queue-bubble" id="queue1"></div>
+                    <div class="queue-bubble" id="queue2"></div>
+                    <div class="queue-bubble" id="queue3"></div>
+                    <div class="queue-bubble" id="queue4"></div>
+                    <div class="queue-bubble" id="queue5"></div>
+                </div>
+                <div class="power-ups">
+                    <button type="button" class="power-up-btn" id="aimBtn" aria-label="Zielhilfe" aria-pressed="false">🎯</button>
+                    <button type="button" class="power-up-btn" id="bombBtn" aria-label="Bombe" aria-pressed="false">💣</button>
                 </div>
             </div>
             <div id="gameOverlay" class="game-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="overlayTitle" aria-describedby="overlayMessage">
