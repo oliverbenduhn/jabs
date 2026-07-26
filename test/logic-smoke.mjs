@@ -58,7 +58,15 @@ function makeElement(id) {
   return el;
 }
 
-function createGame() {
+function makeLocalStorage(store = new Map()) {
+  return {
+    getItem: (key) => (store.has(key) ? store.get(key) : null),
+    setItem: (key, value) => store.set(key, String(value)),
+    removeItem: (key) => store.delete(key),
+  };
+}
+
+function createGame(sharedLocalStorageStore) {
   const elements = new Map();
   function getElementById(id) {
     if (!elements.has(id)) elements.set(id, makeElement(id));
@@ -97,6 +105,7 @@ function createGame() {
     console,
     getComputedStyle: () => ({ getPropertyValue: () => '' }),
     MouseEvent: class {},
+    localStorage: makeLocalStorage(sharedLocalStorageStore),
   };
   sandbox.window.document = documentStub;
   vm.createContext(sandbox);
@@ -193,5 +202,78 @@ check('resetPowerUps() restores one charge per power-up', (instance) => {
   assert.equal(instance.bombCharges, 1);
   assert.equal(instance.aimCharges, 1);
 });
+
+// 8. F5/reload must resume the same game, not start a fresh level: a second
+// instance sharing the same localStorage backing store (simulating a page
+// reload) should pick up where the first instance left off.
+(function checkPersistenceAcrossReload() {
+  const name = 'a reload (shared localStorage) restores grid/score/level instead of starting fresh';
+  try {
+    const store = new Map();
+    const before = createGame(store);
+
+    before.addRow(); // mutate grid away from the pristine initial layout
+    before.score = 470;
+    before.level = 3;
+    before.shotsFired = 2;
+    before.updateUI(); // this is what persists state during real play
+
+    const gridSnapshotBefore = before.grid.map((row) => (row ? row.map((b) => (b ? b.color : null)) : null));
+
+    // Simulate F5: a brand-new instance, same localStorage store.
+    const after = createGame(store);
+
+    assert.equal(after.score, 470, 'score should survive a reload');
+    assert.equal(after.level, 3, 'level should survive a reload');
+    assert.equal(after.shotsFired, 2, 'shotsFired should survive a reload');
+    const gridSnapshotAfter = after.grid.map((row) => (row ? row.map((b) => (b ? b.color : null)) : null));
+    // JSON comparison sidesteps a node:assert quirk where sparse arrays with
+    // identical contents are reported as "not reference-equal" by deepEqual.
+    assert.equal(
+      JSON.stringify(gridSnapshotAfter),
+      JSON.stringify(gridSnapshotBefore),
+      'grid contents should survive a reload instead of regenerating a fresh level'
+    );
+
+    passed++;
+    console.log(`ok - ${name}`);
+  } catch (err) {
+    console.error(`FAIL - ${name}`);
+    console.error(`  ${err.message}`);
+    process.exitCode = 1;
+  }
+})();
+
+// 9. A reload must not refill a spent power-up charge (this was an actual
+// exploit: resetPowerUps() ran before loadState() and always granted a
+// fresh charge, so refreshing the page = an infinite bomb).
+(function checkPowerUpChargesSurviveReload() {
+  const name = 'a reload does not refill a spent bomb charge';
+  try {
+    const store = new Map();
+    const before = createGame(store);
+
+    before.activateBombPowerUp(); // consumes the only charge, arms the bomb
+    assert.equal(before.bombCharges, 0);
+    assert.equal(before.bombArmed, true);
+    before.updateUI(); // persists
+
+    const after = createGame(store); // simulate F5
+    assert.equal(after.bombCharges, 0, 'charge should stay spent across a reload');
+    assert.equal(after.bombArmed, true, 'armed state should survive a reload');
+
+    after.activateBombPowerUp(); // disarm (allowed: button stays clickable while armed)
+    assert.equal(after.bombArmed, false);
+    after.activateBombPowerUp(); // try to re-arm — must fail, no charges left
+    assert.equal(after.bombArmed, false, 'should not be able to re-arm after a reload with 0 charges');
+
+    passed++;
+    console.log(`ok - ${name}`);
+  } catch (err) {
+    console.error(`FAIL - ${name}`);
+    console.error(`  ${err.message}`);
+    process.exitCode = 1;
+  }
+})();
 
 console.log(`\n${passed} check(s) passed`);

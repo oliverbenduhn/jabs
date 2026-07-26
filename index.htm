@@ -488,6 +488,7 @@
                 this.nextBubbles = [];
                 this.score = 0;
                 this.highscore = 0;
+                this.storageKey = 'jabs-save-v1';
                 this.level = 1;
                 this.gameRunning = true;
                 this.paused = false;
@@ -590,10 +591,93 @@
             initializeGame() {
                 this.resetPowerUps();
                 this.activeBubble = null;
-                this.createInitialGrid();
-                this.generateNextBubbles();
-                this.currentBubble = this.getRandomColor();
+                if (!this.loadState()) {
+                    this.createInitialGrid();
+                    this.generateNextBubbles();
+                    this.currentBubble = this.getRandomColor();
+                }
                 this.updateUI();
+            }
+
+            // Persist just enough to resume after a reload (F5): grid
+            // contents, offsets, queue and score/level counters. Positions
+            // aren't stored — updateGridMetrics()/updateGridPositions()
+            // recompute them from row/col on load.
+            saveState() {
+                try {
+                    const state = {
+                        version: 1,
+                        score: this.score,
+                        highscore: this.highscore,
+                        level: this.level,
+                        shotsFired: this.shotsFired,
+                        currentBubble: this.currentBubble,
+                        nextBubbles: this.nextBubbles,
+                        rowOffsets: this.rowOffsets,
+                        grid: this.grid.map((row) => (row ? row.map((b) => (b ? b.color : null)) : null)),
+                        bombCharges: this.bombCharges,
+                        aimCharges: this.aimCharges,
+                        bombArmed: this.bombArmed,
+                        aimAssistShots: this.aimAssistShots,
+                    };
+                    localStorage.setItem(this.storageKey, JSON.stringify(state));
+                } catch (e) {
+                    // localStorage unavailable (private mode, quota, etc.) — skip persistence.
+                }
+            }
+
+            loadState() {
+                try {
+                    const raw = localStorage.getItem(this.storageKey);
+                    if (!raw) return false;
+                    const state = JSON.parse(raw);
+                    if (!state || state.version !== 1 || !Array.isArray(state.grid)) return false;
+
+                    this.score = state.score || 0;
+                    this.highscore = state.highscore || 0;
+                    this.level = state.level || 1;
+                    this.shotsFired = state.shotsFired || 0;
+                    this.currentBubble = state.currentBubble || this.getRandomColor();
+                    this.nextBubbles = Array.isArray(state.nextBubbles) && state.nextBubbles.length === 5
+                        ? state.nextBubbles
+                        : null;
+                    this.rowOffsets = Array.isArray(state.rowOffsets) ? state.rowOffsets : [];
+                    this.grid = state.grid.map((row) => {
+                        if (!row) return [];
+                        const rowArray = new Array(row.length);
+                        row.forEach((color, col) => {
+                            if (color) rowArray[col] = { color };
+                        });
+                        return rowArray;
+                    });
+
+                    // Restore power-up charges/armed state too — otherwise a
+                    // reload would refill a spent charge via resetPowerUps(),
+                    // which runs before loadState() in initializeGame().
+                    this.bombCharges = typeof state.bombCharges === 'number' ? state.bombCharges : this.maxPowerUpCharges;
+                    this.aimCharges = typeof state.aimCharges === 'number' ? state.aimCharges : this.maxPowerUpCharges;
+                    this.bombArmed = !!state.bombArmed;
+                    this.aimAssistShots = state.aimAssistShots || 0;
+                    this.currentAngleLimit = this.aimAssistShots > 0 ? this.aimAngleLimit : this.baseAngleLimit;
+                    this.setPowerUpState(this.bombBtn, this.bombArmed);
+                    this.setPowerUpState(this.aimBtn, this.aimAssistShots > 0);
+                    this.updatePowerUpAvailability();
+
+                    this.updateGridMetrics(this.canvas.width, this.canvas.height);
+                    this.updateGridPositions();
+                    if (!this.nextBubbles) this.generateNextBubbles();
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            clearSavedState() {
+                try {
+                    localStorage.removeItem(this.storageKey);
+                } catch (e) {
+                    // ignore
+                }
             }
             
             createInitialGrid() {
@@ -1157,6 +1241,7 @@
                 if (this.score > this.highscore) {
                     this.highscore = this.score;
                 }
+                this.clearSavedState();
                 this.updateUI();
                 this.showOverlay('Game Over', `Punkte: ${this.score}`);
             }
@@ -1444,6 +1529,9 @@
                 this.grid[0] = newRow;
                 this.updateGridPositions();
                 this.checkGameOver();
+                if (this.gameRunning) {
+                    this.saveState();
+                }
             }
 
             checkGameOver() {
@@ -1487,8 +1575,12 @@
                         queueEl.textContent = this.colorSymbols[this.nextBubbles[i]] || '';
                     }
                 }
+
+                if (this.gameRunning) {
+                    this.saveState();
+                }
             }
-            
+
             darkenColor(color) {
                 // Simple color darkening
                 const hex = color.replace('#', '');
