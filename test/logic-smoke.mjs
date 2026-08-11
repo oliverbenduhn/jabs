@@ -186,6 +186,45 @@ check('resetPowerUps() restores one charge per power-up', (instance) => {
   assert.equal(instance.aimCharges, 1);
 });
 
+// 7b. Ceiling snap must trigger on top-edge contact (y - r <= 0), not on
+// center-at-ceiling (y <= 0) — otherwise the bubble overshoots the top by a
+// full radius before snapping into row 0.
+check('ceiling snap triggers on top-edge contact (y - r <= 0), not center-at-ceiling', (instance) => {
+  const r = instance.hexGrid.bubbleRadius;
+  // Clear the top three rows so nothing can stop the bubble except the
+  // ceiling (no grid collision). Lower rows stay filled so the grid is not
+  // "won" and no game-over fires.
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < instance.hexGrid.columnCount; col++) {
+      delete instance.hexGrid.grid[row][col];
+    }
+  }
+  // resolveTurn() would push a new row when shotsFired % 5 === 0; avoid that.
+  instance.shotsFired = 1;
+
+  const color = '#1982c4';
+  // Start with the center one pixel below the fixed trigger (y = r + 1):
+  // top edge (y - r) = 1 > 0 (not at ceiling yet), center y > 0 (old trigger
+  // not reached either). Move 1 px upward this frame -> y = r, top edge = 0.
+  instance.activeBubble = {
+    x: instance.shooter.x,
+    y: instance.hexGrid.gridTopOffset + 1,
+    dirX: 0,
+    dirY: -1,
+    speed: 100,
+    color,
+    radius: r,
+    powerUp: null,
+  };
+
+  instance.updateActiveBubble(10); // 10 ms @ 100 px/s = 1 px -> y = gridTopOffset (= r)
+
+  // With the fix, y - r = 0 <= 0 -> the bubble snaps this frame.
+  assert.equal(instance.activeBubble, null, 'bubble must snap when its top edge touches the ceiling');
+  const placed = (instance.hexGrid.grid[0] || []).find((b) => b && b.color === color);
+  assert.ok(placed, 'snapped bubble must land in row 0');
+});
+
 // 8. F5/reload must resume the same game, not start a fresh level: a second
 // instance sharing the same localStorage backing store (simulating a page
 // reload) should pick up where the first instance left off.

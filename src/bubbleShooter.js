@@ -677,7 +677,10 @@ export class BubbleShooter {
             }
 
             const collision = this.hexGrid.checkCollision(bubble);
-            if (collision || bubble.y <= this.topBoundary) {
+            // Trigger when the bubble's TOP edge reaches the ceiling
+            // (y - r <= 0), not when its center does — otherwise the
+            // bubble overshoots the top by a full radius before snapping.
+            if (collision || bubble.y - bubble.radius <= this.topBoundary) {
                 this.placeBubble(bubble, collision);
                 this.activeBubble = null;
                 return;
